@@ -562,12 +562,13 @@ public class ASAP
 		NextEventCycle = nextEventCycle;
 	}
 
-	int Do6502Frame!()
+	int GetFrameCycles() => ModuleInfo.IsNtsc() ? 262 * 114 : 312 * 114;
+
+	void Do6502Cycles!(int cycles)
 	{
 		NextEventCycle = 0;
 		NextScanlineCycle = 0;
 		Nmist = Nmist == NmiStatus.Reset ? NmiStatus.OnVBlank : NmiStatus.WasVBlank;
-		int cycles = ModuleInfo.IsNtsc() ? 262 * 114 : 312 * 114;
 		Cpu.DoFrame(cycles);
 		Cpu.Cycle -= cycles;
 		if (NextPlayerCycle != Pokey.NeverCycle)
@@ -578,17 +579,25 @@ public class ASAP
 			if (i == 0)
 				break;
 		}
+	}
+
+	int Do6502Frame!()
+	{
+		int cycles = GetFrameCycles();
+		Do6502Cycles(cycles);
 		return cycles;
 	}
 
-	int DoFrame!()
+	int DoCycles!(int cycles)
 	{
 		GtiaOrCovoxPlayedThisFrame = false;
 		Pokeys.StartFrame();
-		int cycles = Do6502Frame();
+		Do6502Cycles(cycles);
 		Pokeys.EndFrame(cycles);
 		return cycles;
 	}
+
+	int DoFrame!() => DoCycles(GetFrameCycles());
 
 	/// Loads music data ("module").
 	public void Load!(
@@ -1005,5 +1014,42 @@ public class ASAP
 	{
 		Pokey pokey = (channel & 4) == 0 ? Pokeys.BasePokey : Pokeys.ExtraPokey;
 		return pokey.Channels[channel & 3].Audc & 0xf;
+	}
+
+	/// Emulates up to the next call of the player routine, so that the POKEY
+	/// registers can be read between the calls with `GetPokeyRegisterShadow`.
+	/// For a player called once per video frame this is one video frame; a
+	/// faster player is stepped call by call, so a register dump gets every
+	/// row it would record, and a player slower than the frame rate advances
+	/// frame by frame. `Generate` steps the emulation too, but as an internal
+	/// detail of filling the requested number of bytes, not aligned with
+	/// player calls. Call `PlaySong` first.
+	public void StepPlayer!()
+	{
+		DoCycles(Math.Min(114 * ModuleInfo.GetPlayerRateScanlines(), GetFrameCycles()));
+	}
+
+	/// Returns the byte last written to a POKEY audio register.
+	/// These registers are write-only in the hardware, so there is no
+	/// read-back to emulate; this reports what the player poked, which is what
+	/// a register dump records, one row per player call.
+	public int GetPokeyRegisterShadow(
+		/// 0 for the base POKEY, 1 for the second POKEY of a stereo tune.
+		int chip,
+		/// 0 to 7 for AUDF1, AUDC1, AUDF2, AUDC2, AUDF3, AUDC3, AUDF4, AUDC4;
+		/// 8 for AUDCTL and 15 for SKCTL. Any other value is masked into the
+		/// channel registers, as in `GetPokeyChannelVolume`.
+		int offset)
+	{
+		Pokey pokey = chip == 0 ? Pokeys.BasePokey : Pokeys.ExtraPokey;
+		switch (offset) {
+		case 8:
+			return pokey.Audctl;
+		case 15:
+			return pokey.Skctl;
+		default:
+			PokeyChannel channel = pokey.Channels[(offset >> 1) & 3];
+			return (offset & 1) == 0 ? channel.Audf : channel.Audc;
+		}
 	}
 }

@@ -480,7 +480,13 @@ static bool ASAP_IsIrq(const ASAP *self);
 
 static void ASAP_HandleEvent(ASAP *self);
 
+static int ASAP_GetFrameCycles(const ASAP *self);
+
+static void ASAP_Do6502Cycles(ASAP *self, int cycles);
+
 static int ASAP_Do6502Frame(ASAP *self);
+
+static int ASAP_DoCycles(ASAP *self, int cycles);
 
 static int ASAP_DoFrame(ASAP *self);
 
@@ -2722,12 +2728,16 @@ static void ASAP_HandleEvent(ASAP *self)
 	self->nextEventCycle = nextEventCycle;
 }
 
-static int ASAP_Do6502Frame(ASAP *self)
+static int ASAP_GetFrameCycles(const ASAP *self)
+{
+	return ASAPInfo_IsNtsc(&self->moduleInfo) ? 29868 : 35568;
+}
+
+static void ASAP_Do6502Cycles(ASAP *self, int cycles)
 {
 	self->nextEventCycle = 0;
 	self->nextScanlineCycle = 0;
 	self->nmist = self->nmist == NmiStatus_RESET ? NmiStatus_ON_V_BLANK : NmiStatus_WAS_V_BLANK;
-	int cycles = ASAPInfo_IsNtsc(&self->moduleInfo) ? 29868 : 35568;
 	Cpu6502_DoFrame(&self->cpu, cycles);
 	self->cpu.cycle -= cycles;
 	if (self->nextPlayerCycle != 8388608)
@@ -2738,16 +2748,27 @@ static int ASAP_Do6502Frame(ASAP *self)
 		if (i == 0)
 			break;
 	}
+}
+
+static int ASAP_Do6502Frame(ASAP *self)
+{
+	int cycles = ASAP_GetFrameCycles(self);
+	ASAP_Do6502Cycles(self, cycles);
+	return cycles;
+}
+
+static int ASAP_DoCycles(ASAP *self, int cycles)
+{
+	self->gtiaOrCovoxPlayedThisFrame = false;
+	PokeyPair_StartFrame(&self->pokeys);
+	ASAP_Do6502Cycles(self, cycles);
+	PokeyPair_EndFrame(&self->pokeys, cycles);
 	return cycles;
 }
 
 static int ASAP_DoFrame(ASAP *self)
 {
-	self->gtiaOrCovoxPlayedThisFrame = false;
-	PokeyPair_StartFrame(&self->pokeys);
-	int cycles = ASAP_Do6502Frame(self);
-	PokeyPair_EndFrame(&self->pokeys, cycles);
-	return cycles;
+	return ASAP_DoCycles(self, ASAP_GetFrameCycles(self));
 }
 
 bool ASAP_Load(ASAP *self, const char *filename, uint8_t const *module, int moduleLen)
@@ -3100,6 +3121,26 @@ int ASAP_GetPokeyChannelVolume(const ASAP *self, int channel)
 {
 	const Pokey *pokey = (channel & 4) == 0 ? &self->pokeys.basePokey : &self->pokeys.extraPokey;
 	return pokey->channels[channel & 3].audc & 15;
+}
+
+void ASAP_StepPlayer(ASAP *self)
+{
+	ASAP_DoCycles(self, FuInt_Min(114 * ASAPInfo_GetPlayerRateScanlines(&self->moduleInfo), ASAP_GetFrameCycles(self)));
+}
+
+int ASAP_GetPokeyRegisterShadow(const ASAP *self, int chip, int offset)
+{
+	const Pokey *pokey = chip == 0 ? &self->pokeys.basePokey : &self->pokeys.extraPokey;
+	switch (offset) {
+	case 8:
+		return pokey->audctl;
+	case 15:
+		return pokey->skctl;
+	default:
+		;
+		const PokeyChannel *channel = &pokey->channels[offset >> 1 & 3];
+		return (offset & 1) == 0 ? channel->audf : channel->audc;
+	}
 }
 
 static uint8_t const *ASAP6502_GetPlayerRoutine(const ASAPInfo *info)

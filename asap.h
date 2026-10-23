@@ -163,6 +163,32 @@ int ASAP_Generate(ASAP *self, uint8_t *buffer, int bufferLen, ASAPSampleFormat f
  */
 int ASAP_GetPokeyChannelVolume(const ASAP *self, int channel);
 
+/**
+ * Emulates up to the next call of the player routine, so that the POKEY
+ * registers can be read between the calls with <code>GetPokeyRegisterShadow</code>.
+ * For a player called once per video frame this is one video frame; a
+ * faster player is stepped call by call, so a register dump gets every
+ * row it would record, and a player slower than the frame rate advances
+ * frame by frame. <code>Generate</code> steps the emulation too, but as an internal
+ * detail of filling the requested number of bytes, not aligned with
+ * player calls. Call <code>PlaySong</code> first.
+ * @param self This <code>ASAP</code>.
+ */
+void ASAP_StepPlayer(ASAP *self);
+
+/**
+ * Returns the byte last written to a POKEY audio register.
+ * These registers are write-only in the hardware, so there is no
+ * read-back to emulate; this reports what the player poked, which is what
+ * a register dump records, one row per player call.
+ * @param self This <code>ASAP</code>.
+ * @param chip 0 for the base POKEY, 1 for the second POKEY of a stereo tune.
+ * @param offset 0 to 7 for AUDF1, AUDC1, AUDF2, AUDC2, AUDF3, AUDC3, AUDF4, AUDC4;
+ * 8 for AUDCTL and 15 for SKCTL. Any other value is masked into the
+ * channel registers, as in <code>GetPokeyChannelVolume</code>.
+ */
+int ASAP_GetPokeyRegisterShadow(const ASAP *self, int chip, int offset);
+
 ASAPInfo *ASAPInfo_New(void);
 void ASAPInfo_Delete(ASAPInfo *self);
 

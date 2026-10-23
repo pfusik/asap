@@ -165,7 +165,7 @@ class Pokey
 {
 	internal PokeyChannel()[4] Channels;
 	internal int Audctl;
-	int Skctl;
+	internal int Skctl;
 	internal int Irqst;
 	internal bool Init;
 	int DivCycles;
