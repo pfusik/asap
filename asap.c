@@ -370,25 +370,27 @@ static int ASAPInfo_GetMptFirstInstrOrPatternAddr(uint8_t const *module);
 
 static int ASAPInfo_GetMptTrackLen(uint8_t const *module, int ch);
 
-static void ASAPInfo_ParseMptSong(ASAPInfo *self, uint8_t const *module, bool *globalSeen, int songLen, int pos);
+static int ASAPInfo_SafeGetByte(uint8_t const *module, int moduleLen, int i);
+
+static bool ASAPInfo_ParseMptSong(ASAPInfo *self, uint8_t const *module, int moduleLen, bool *globalSeen, int songLen, int pos);
 
 static bool ASAPInfo_ParseMpt(ASAPInfo *self, uint8_t const *module, int moduleLen, ASAPModuleType type);
 
 static int ASAPInfo_GetRmtInstrumentFrames(uint8_t const *module, int instrument, int volume, int volumeFrame, bool onExtraPokey);
 
-static void ASAPInfo_ParseRmtSong(ASAPInfo *self, uint8_t const *module, bool *globalSeen, int songLen, int posShift, int pos);
+static bool ASAPInfo_ParseRmtSong(ASAPInfo *self, uint8_t const *module, int moduleLen, bool *globalSeen, int songLen, int posShift, int pos);
 
 static bool ASAPInfo_ValidateRmt(uint8_t const *module, int moduleLen);
 
 static bool ASAPInfo_ParseRmt(ASAPInfo *self, uint8_t const *module, int moduleLen);
 
-static void ASAPInfo_ParseTmcSong(ASAPInfo *self, uint8_t const *module, int pos);
+static bool ASAPInfo_ParseTmcSong(ASAPInfo *self, uint8_t const *module, int moduleLen, int pos);
 
 static int ASAPInfo_ParseTmcTitle(uint8_t *title, int titleLen, uint8_t const *module, int moduleOffset);
 
 static bool ASAPInfo_ParseTmc(ASAPInfo *self, uint8_t const *module, int moduleLen);
 
-static void ASAPInfo_ParseTm2Song(ASAPInfo *self, uint8_t const *module, int pos);
+static bool ASAPInfo_ParseTm2Song(ASAPInfo *self, uint8_t const *module, int moduleLen, int pos);
 
 static bool ASAPInfo_ParseTm2(ASAPInfo *self, uint8_t const *module, int moduleLen);
 
@@ -3501,7 +3503,14 @@ static int ASAPInfo_GetMptTrackLen(uint8_t const *module, int ch)
 	return endAddr - ASAPInfo_GetMptTrackAddress(module, ch);
 }
 
-static void ASAPInfo_ParseMptSong(ASAPInfo *self, uint8_t const *module, bool *globalSeen, int songLen, int pos)
+static int ASAPInfo_SafeGetByte(uint8_t const *module, int moduleLen, int i)
+{
+	if (i < 0 || i >= moduleLen)
+		return -1;
+	return module[i];
+}
+
+static bool ASAPInfo_ParseMptSong(ASAPInfo *self, uint8_t const *module, int moduleLen, bool *globalSeen, int songLen, int pos)
 {
 	int addrToOffset = ASAPInfo_GetWord(module, 2) - 6 - self->mptSongBugExtra;
 	int tempo = module[463];
@@ -3548,7 +3557,8 @@ static void ASAPInfo_ParseMptSong(ASAPInfo *self, uint8_t const *module, bool *g
 				if (--blankRowsCounter[ch] >= 0)
 					continue;
 				for (;;) {
-					i = module[patternOffset[ch]++];
+					if ((i = ASAPInfo_SafeGetByte(module, moduleLen, patternOffset[ch]++)) == -1)
+						return false;
 					if (i < 64 || i == 254)
 						break;
 					if (i < 128)
@@ -3573,6 +3583,7 @@ static void ASAPInfo_ParseMptSong(ASAPInfo *self, uint8_t const *module, bool *g
 	}
 	if (playerCalls > 0)
 		ASAPInfo_AddSong(self, playerCalls);
+	return true;
 }
 
 static bool ASAPInfo_ParseMpt(ASAPInfo *self, uint8_t const *module, int moduleLen, ASAPModuleType type)
@@ -3599,7 +3610,8 @@ static bool ASAPInfo_ParseMpt(ASAPInfo *self, uint8_t const *module, int moduleL
 	for (int pos = 0; pos < songLen && self->songs < 32; pos++) {
 		if (!globalSeen[pos]) {
 			self->songPos[self->songs] = (uint8_t) pos;
-			ASAPInfo_ParseMptSong(self, module, globalSeen, songLen, pos);
+			if (!ASAPInfo_ParseMptSong(self, module, moduleLen, globalSeen, songLen, pos))
+				return false;
 		}
 	}
 	if (self->songs == 0)
@@ -3669,7 +3681,7 @@ static int ASAPInfo_GetRmtInstrumentFrames(uint8_t const *module, int instrument
 	return playerCalls / perFrame;
 }
 
-static void ASAPInfo_ParseRmtSong(ASAPInfo *self, uint8_t const *module, bool *globalSeen, int songLen, int posShift, int pos)
+static bool ASAPInfo_ParseRmtSong(ASAPInfo *self, uint8_t const *module, int moduleLen, bool *globalSeen, int songLen, int posShift, int pos)
 {
 	int addrToOffset = ASAPInfo_GetWord(module, 2) - 6;
 	int tempo = module[11];
@@ -3704,7 +3716,7 @@ static void ASAPInfo_ParseRmtSong(ASAPInfo *self, uint8_t const *module, bool *g
 			else {
 				patternOffset[ch] = patternBegin[ch] = module[patternLoOffset + p] + (module[patternHiOffset + p] << 8) - addrToOffset;
 				if (patternOffset[ch] < 0)
-					return;
+					return true;
 				blankRows[ch] = 0;
 			}
 		}
@@ -3716,9 +3728,14 @@ static void ASAPInfo_ParseRmtSong(ASAPInfo *self, uint8_t const *module, bool *g
 				if (--blankRows[ch] > 0)
 					continue;
 				for (;;) {
-					int i = module[patternOffset[ch]++];
+					int i = ASAPInfo_SafeGetByte(module, moduleLen, patternOffset[ch]++);
+					if (i == -1)
+						return false;
 					if ((i & 63) < 62) {
-						i += module[patternOffset[ch]++] << 8;
+						int hi = ASAPInfo_SafeGetByte(module, moduleLen, patternOffset[ch]++);
+						if (hi == -1)
+							return false;
+						i += hi << 8;
 						if ((i & 63) != 61) {
 							instrumentNo[ch] = i >> 10;
 							instrumentFrame[ch] = frames;
@@ -3728,7 +3745,8 @@ static void ASAPInfo_ParseRmtSong(ASAPInfo *self, uint8_t const *module, bool *g
 						break;
 					}
 					if (i == 62) {
-						blankRows[ch] = module[patternOffset[ch]++];
+						if ((blankRows[ch] = ASAPInfo_SafeGetByte(module, moduleLen, patternOffset[ch]++)) == -1)
+							return false;
 						break;
 					}
 					if ((i & 63) == 62) {
@@ -3736,11 +3754,14 @@ static void ASAPInfo_ParseRmtSong(ASAPInfo *self, uint8_t const *module, bool *g
 						break;
 					}
 					if ((i & 191) == 63) {
-						tempo = module[patternOffset[ch]++];
+						if ((tempo = ASAPInfo_SafeGetByte(module, moduleLen, patternOffset[ch]++)) == -1)
+							return false;
 						continue;
 					}
 					if (i == 191) {
-						patternOffset[ch] = patternBegin[ch] + module[patternOffset[ch]];
+						if ((i = ASAPInfo_SafeGetByte(module, moduleLen, patternOffset[ch])) == -1)
+							return false;
+						patternOffset[ch] = patternBegin[ch] + i;
 						continue;
 					}
 					patternRows = -1;
@@ -3768,6 +3789,7 @@ static void ASAPInfo_ParseRmtSong(ASAPInfo *self, uint8_t const *module, bool *g
 	}
 	if (frames > 0)
 		ASAPInfo_AddSong(self, frames);
+	return true;
 }
 
 static bool ASAPInfo_ValidateRmt(uint8_t const *module, int moduleLen)
@@ -3813,7 +3835,8 @@ static bool ASAPInfo_ParseRmt(ASAPInfo *self, uint8_t const *module, int moduleL
 	for (int pos = 0; pos < songLen && self->songs < 32; pos++) {
 		if (!globalSeen[pos]) {
 			self->songPos[self->songs] = (uint8_t) pos;
-			ASAPInfo_ParseRmtSong(self, module, globalSeen, songLen, posShift, pos);
+			if (!ASAPInfo_ParseRmtSong(self, module, moduleLen, globalSeen, songLen, posShift, pos))
+				return false;
 		}
 	}
 	self->fastplay = 312 / perFrame;
@@ -3832,7 +3855,7 @@ static bool ASAPInfo_ParseRmt(ASAPInfo *self, uint8_t const *module, int moduleL
 	return true;
 }
 
-static void ASAPInfo_ParseTmcSong(ASAPInfo *self, uint8_t const *module, int pos)
+static bool ASAPInfo_ParseTmcSong(ASAPInfo *self, uint8_t const *module, int moduleLen, int pos)
 {
 	int addrToOffset = ASAPInfo_GetWord(module, 2) - 6;
 	int tempo = module[36] + 1;
@@ -3850,13 +3873,16 @@ static void ASAPInfo_ParseTmcSong(ASAPInfo *self, uint8_t const *module, int pos
 				if (--blankRows[ch] >= 0)
 					continue;
 				for (;;) {
-					int i = module[patternOffset[ch]++];
+					int i = ASAPInfo_SafeGetByte(module, moduleLen, patternOffset[ch]++);
+					if (i == -1)
+						return false;
 					if (i < 64) {
 						patternOffset[ch]++;
 						break;
 					}
 					if (i == 64) {
-						i = module[patternOffset[ch]++];
+						if ((i = ASAPInfo_SafeGetByte(module, moduleLen, patternOffset[ch]++)) == -1)
+							return false;
 						if ((i & 127) == 0)
 							patternRows = 0;
 						else
@@ -3866,7 +3892,9 @@ static void ASAPInfo_ParseTmcSong(ASAPInfo *self, uint8_t const *module, int pos
 						break;
 					}
 					if (i < 128) {
-						i = module[patternOffset[ch]++] & 127;
+						if ((i = ASAPInfo_SafeGetByte(module, moduleLen, patternOffset[ch]++)) == -1)
+							return false;
+						i &= 127;
 						if (i == 0)
 							patternRows = 0;
 						else
@@ -3887,6 +3915,7 @@ static void ASAPInfo_ParseTmcSong(ASAPInfo *self, uint8_t const *module, int pos
 	if (module[436 + pos] < 128)
 		self->loops[self->songs] = true;
 	ASAPInfo_AddSong(self, frames);
+	return true;
 }
 
 static int ASAPInfo_ParseTmcTitle(uint8_t *title, int titleLen, uint8_t const *module, int moduleOffset)
@@ -3953,10 +3982,13 @@ static bool ASAPInfo_ParseTmc(ASAPInfo *self, uint8_t const *module, int moduleL
 	}
 	while (module[437 + lastPos] >= 128);
 	self->songs = 0;
-	ASAPInfo_ParseTmcSong(self, module, 0);
+	if (!ASAPInfo_ParseTmcSong(self, module, moduleLen, 0))
+		return false;
 	for (i = 0; i < lastPos && self->songs < 32; i += 16)
-		if (module[437 + i] >= 128)
-			ASAPInfo_ParseTmcSong(self, module, i + 16);
+		if (module[437 + i] >= 128) {
+			if (!ASAPInfo_ParseTmcSong(self, module, moduleLen, i + 16))
+				return false;
+		}
 	i = module[37];
 	if (i < 1 || i > 4)
 		return false;
@@ -3967,7 +3999,7 @@ static bool ASAPInfo_ParseTmc(ASAPInfo *self, uint8_t const *module, int moduleL
 	return true;
 }
 
-static void ASAPInfo_ParseTm2Song(ASAPInfo *self, uint8_t const *module, int pos)
+static bool ASAPInfo_ParseTm2Song(ASAPInfo *self, uint8_t const *module, int moduleLen, int pos)
 {
 	int addrToOffset = ASAPInfo_GetWord(module, 2) - 6;
 	int tempo = module[36] + 1;
@@ -3992,7 +4024,9 @@ static void ASAPInfo_ParseTm2Song(ASAPInfo *self, uint8_t const *module, int pos
 				if (--blankRows[ch] >= 0)
 					continue;
 				for (;;) {
-					int i = module[patternOffset[ch]++];
+					int i = ASAPInfo_SafeGetByte(module, moduleLen, patternOffset[ch]++);
+					if (i == -1)
+						return false;
 					if (i == 0) {
 						patternOffset[ch]++;
 						break;
@@ -4007,7 +4041,8 @@ static void ASAPInfo_ParseTm2Song(ASAPInfo *self, uint8_t const *module, int pos
 						break;
 					}
 					if (i == 128) {
-						blankRows[ch] = module[patternOffset[ch]++];
+						if ((blankRows[ch] = ASAPInfo_SafeGetByte(module, moduleLen, patternOffset[ch]++)) == -1)
+							return false;
 						break;
 					}
 					if (i < 192)
@@ -4037,6 +4072,7 @@ static void ASAPInfo_ParseTm2Song(ASAPInfo *self, uint8_t const *module, int pos
 		pos += 17;
 	}
 	ASAPInfo_AddSong(self, playerCalls);
+	return true;
 }
 
 static bool ASAPInfo_ParseTm2(ASAPInfo *self, uint8_t const *module, int moduleLen)
@@ -4076,11 +4112,14 @@ static bool ASAPInfo_ParseTm2(ASAPInfo *self, uint8_t const *module, int moduleL
 	}
 	while (c == 0 || c >= 128);
 	self->songs = 0;
-	ASAPInfo_ParseTm2Song(self, module, 0);
+	if (!ASAPInfo_ParseTm2Song(self, module, moduleLen, 0))
+		return false;
 	for (i = 0; i < lastPos && self->songs < 32; i += 17) {
 		c = module[918 + i];
-		if (c == 0 || c >= 128)
-			ASAPInfo_ParseTm2Song(self, module, i + 17);
+		if (c == 0 || c >= 128) {
+			if (!ASAPInfo_ParseTm2Song(self, module, moduleLen, i + 17))
+				return false;
+		}
 	}
 	uint8_t title[127];
 	int titleLen = ASAPInfo_ParseTmcTitle(title, 0, module, 39);
