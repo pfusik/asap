@@ -1,5 +1,4 @@
 CSC = $(DO)csc -nologo -nullable:enable -o+ -out:$@ $(if $(filter %.dll,$@),-t:library) $^
-NDOC = $(DO)"C:/Program Files (x86)/NDoc3/bin/NDoc3Console.exe"
 
 # no user-configurable paths below this line
 
@@ -22,10 +21,9 @@ csharp/asap.cs: $(call src,asap.fu asap6502.fu asapinfo.fu cpu6502.fu pokey.fu) 
 	$(FUT) -n Sf.Asap
 CLEAN += csharp/asap.cs
 
-csharp/doc/ASAP.chm: csharp/doc/ASAP.dll
-	$(NDOC) -documenter:MSDN -CleanIntermediates=true -DocumentInheritedFrameworkMembers=false \
-		-OutputDirectory=csharp/doc -OutputTarget=HtmlHelp -HtmlHelpName=ASAP -Title="ASAP .NET API" $<
-CLEAN += csharp/doc/ASAP.chm
+csharp/Help/index.html: csharp/asap.shfbproj csharp/doc/ASAP.dll
+	msbuild $<
+CLEANDIR += csharp/Help
 
 csharp/doc/ASAP.dll: csharp/asap.cs
 	$(CSC) -t:library -doc:csharp/doc/ASAP.xml
