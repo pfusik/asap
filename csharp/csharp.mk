@@ -25,6 +25,10 @@ csharp/Help/index.html: csharp/asap.shfbproj csharp/doc/ASAP.dll
 	msbuild $<
 CLEANDIR += csharp/Help
 
+csharp/_site/manifest.json: csharp/docfx.json csharp/doc/ASAP.dll
+	docfx $< --serve
+CLEANDIR += csharp/_site csharp/doc/api
+
 csharp/doc/ASAP.dll: csharp/asap.cs
 	$(CSC) -t:library -doc:csharp/doc/ASAP.xml
 CLEAN += csharp/doc/ASAP.dll csharp/doc/ASAP.xml
