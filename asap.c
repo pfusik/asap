@@ -3592,13 +3592,8 @@ static bool ASAPInfo_ParseMpt(ASAPInfo *self, uint8_t const *module, int moduleL
 		return false;
 	self->originalType = self->type = type;
 	int track0Len = ASAPInfo_GetMptTrackLen(module, 0);
-	if (7 + ASAPInfo_GetWord(module, 4) - ASAPInfo_GetWord(module, 2) == moduleLen)
-		self->mptSongBugExtra = 0;
-	else {
-		self->mptSongBugExtra = 3 * track0Len + ASAPInfo_GetMptTrackAddress(module, 1) - ASAPInfo_GetMptFirstInstrOrPatternAddr(module);
-		moduleLen -= self->mptSongBugExtra;
-	}
-	if (!ASAPInfo_ParseModule(self, module, moduleLen))
+	self->mptSongBugExtra = 7 + ASAPInfo_GetWord(module, 4) - ASAPInfo_GetWord(module, 2) == moduleLen ? 0 : 3 * track0Len + ASAPInfo_GetMptTrackAddress(module, 1) - ASAPInfo_GetMptFirstInstrOrPatternAddr(module);
+	if (!ASAPInfo_ParseModule(self, module, moduleLen - self->mptSongBugExtra))
 		return false;
 	if (ASAPInfo_GetMptTrackAddress(module, 0) != ASAPInfo_GetWord(module, 2) + 458)
 		return false;

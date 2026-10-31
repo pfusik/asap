@@ -516,13 +516,9 @@ public class ASAPInfo
 			throw ASAPFormatException("Module too short");
 		OriginalType = Type = type;
 		int track0Len = GetMptTrackLen(module, 0);
-		if (7 + GetWord(module, 4) - GetWord(module, 2) == moduleLen)
-			MptSongBugExtra = 0;
-		else {
-			MptSongBugExtra = 3 * track0Len + GetMptTrackAddress(module, 1) - GetMptFirstInstrOrPatternAddr(module);
-			moduleLen -= MptSongBugExtra;
-		}
-		ParseModule(module, moduleLen);
+		MptSongBugExtra = 7 + GetWord(module, 4) - GetWord(module, 2) == moduleLen ? 0
+			: 3 * track0Len + GetMptTrackAddress(module, 1) - GetMptFirstInstrOrPatternAddr(module);
+		ParseModule(module, moduleLen - MptSongBugExtra);
 		if (GetMptTrackAddress(module, 0) != GetWord(module, 2) + 0x1ca)
 			throw ASAPFormatException("Invalid address of the first track");
 		int songLen = track0Len >> 1;
