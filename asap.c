@@ -445,6 +445,12 @@ struct ASAP {
 	Cpu6502 cpu;
 	int nextScanlineCycle;
 	NmiStatus nmist;
+	/**
+	 * Cycles of the current video frame emulated by earlier calls of
+	 * <code>Do6502Cycles</code> - non-zero only while <code>StepPlayer</code> steps a player
+	 * called more than once per frame.
+	 */
+	int frameCyclesDone;
 	int consol;
 	uint8_t covox[4];
 	PokeyPair pokeys;
@@ -467,6 +473,12 @@ static void ASAP_Construct(ASAP *self);
 static void ASAP_Destruct(ASAP *self);
 
 static int ASAP_GetFrameCycles(const ASAP *self);
+
+/**
+ * The CPU's position within the video frame, which VCOUNT and NMIST report.
+ * @param self This <code>ASAP</code>.
+ */
+static int ASAP_GetCycleInFrame(const ASAP *self);
 
 static int ASAP_PeekHardware(const ASAP *self, int addr);
 
@@ -2539,6 +2551,11 @@ static int ASAP_GetFrameCycles(const ASAP *self)
 	return ASAPInfo_IsNtsc(&self->moduleInfo) ? 29868 : 35568;
 }
 
+static int ASAP_GetCycleInFrame(const ASAP *self)
+{
+	return self->frameCyclesDone + self->cpu.cycle;
+}
+
 static int ASAP_PeekHardware(const ASAP *self, int addr)
 {
 	switch (addr & 65311) {
@@ -2559,7 +2576,7 @@ static int ASAP_PeekHardware(const ASAP *self, int addr)
 	case 54283:
 	case 54299:
 		;
-		int cycle = self->cpu.cycle;
+		int cycle = ASAP_GetCycleInFrame(self);
 		if (cycle > ASAP_GetFrameCycles(self))
 			return 0;
 		return cycle / 228;
@@ -2571,7 +2588,7 @@ static int ASAP_PeekHardware(const ASAP *self, int addr)
 		case NmiStatus_WAS_V_BLANK:
 			return 95;
 		default:
-			return self->cpu.cycle < 28291 ? 31 : 95;
+			return ASAP_GetCycleInFrame(self) < 28291 ? 31 : 95;
 		}
 	default:
 		return self->cpu.memory[addr];
@@ -2590,7 +2607,7 @@ static void ASAP_PokeHardware(ASAP *self, int addr, int data)
 		self->cpu.cycle += (x <= 106 ? 106 : 220) - x;
 	}
 	else if ((addr & 65295) == 54287) {
-		self->nmist = self->cpu.cycle < 28292 ? NmiStatus_ON_V_BLANK : NmiStatus_RESET;
+		self->nmist = ASAP_GetCycleInFrame(self) < 28292 ? NmiStatus_ON_V_BLANK : NmiStatus_RESET;
 	}
 	else if ((addr & 65280) == ASAPInfo_GetCovoxAddress(&self->moduleInfo)) {
 		addr &= 3;
@@ -2739,7 +2756,8 @@ static void ASAP_Do6502Cycles(ASAP *self, int cycles)
 {
 	self->nextEventCycle = 0;
 	self->nextScanlineCycle = 0;
-	self->nmist = self->nmist == NmiStatus_RESET ? NmiStatus_ON_V_BLANK : NmiStatus_WAS_V_BLANK;
+	if (self->frameCyclesDone == 0)
+		self->nmist = self->nmist == NmiStatus_RESET ? NmiStatus_ON_V_BLANK : NmiStatus_WAS_V_BLANK;
 	Cpu6502_DoFrame(&self->cpu, cycles);
 	self->cpu.cycle -= cycles;
 	if (self->nextPlayerCycle != 8388608)
@@ -2750,6 +2768,9 @@ static void ASAP_Do6502Cycles(ASAP *self, int cycles)
 		if (i == 0)
 			break;
 	}
+	self->frameCyclesDone += cycles;
+	if (self->frameCyclesDone >= ASAP_GetFrameCycles(self))
+		self->frameCyclesDone = 0;
 }
 
 static int ASAP_Do6502Frame(ASAP *self)
@@ -2883,6 +2904,7 @@ static bool ASAP_RestartSong(ASAP *self, int muteMask)
 	self->silenceCyclesCounter = self->silenceCycles;
 	Cpu6502_Reset(&self->cpu);
 	self->nmist = NmiStatus_ON_V_BLANK;
+	self->frameCyclesDone = 0;
 	self->consol = 8;
 	self->covox[0] = 128;
 	self->covox[1] = 128;
