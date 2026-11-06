@@ -41,7 +41,7 @@
 	<p>Atari 8-bit tracker files, such as RMT, can be converted to the SAP format.
 	On Windows, use "Save as..." from the File Information window described above.
 	On any operating system, you can use asapconv.</p>
-	<p>The main reason for such a conversion is the ability to specify metadata.
+	<p>The main reason for such a conversion is the ability to add metadata.
 	You can type it in the File Information window or specify on the command line:</p>
 	<pre>asapconv -o Komar.sap -a "Lukasz Sychowicz (X-Ray)" -n "Komar" -d "2002" Komar.mpt</pre>
 
