@@ -124,7 +124,7 @@ public class ASAPInfo
 	/// ASAP version as a string.
 	public const string Version = $"{VersionMajor}.{VersionMinor}.{VersionMicro}";
 
-	/// Years ASAP was created in.
+	/// Years in which ASAP was created.
 	public const string Years = "2005-2026";
 
 	/// Short credits for ASAP.
@@ -1729,7 +1729,7 @@ public class ASAPInfo
 	}
 
 	/// Returns music title or filename.
-	/// If title is unknown returns filename without the path or extension.
+	/// If the title is unknown, returns the filename without the path or extension.
 	public string GetTitleOrFilename() => Title.Length > 0 ? Title : Filename;
 
 	/// Returns music creation date.

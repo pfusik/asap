@@ -279,7 +279,7 @@ class Pokey
 			DeltaBuffer[i + j] += delta * pokeys.SincLookup[fraction][j];
 	}
 
-	/// Fills `DeltaBuffer` up to `cycleLimit` basing on current Audf/Audc/Audctl values.
+	/// Fills `DeltaBuffer` up to `cycleLimit` based on the current Audf/Audc/Audctl values.
 	internal void GenerateUntilCycle!(PokeyPair pokeys, int cycleLimit)
 	{
 		for (;;) {

@@ -4,7 +4,7 @@
 	<p>To install, download and open <download prefix="asap-" suffix="-android.apk" />.
 	It's compatible with Android 5.0 and newer.</p>
 	<p>The application has the <a href="https://asma.atari.org">ASMA</a> archive bundled.
-	On start it shows the whole archive contents. Tap "shuffle all" or the search button.
+	On start, it shows the contents of the whole archive. Tap "shuffle all" or the search button.
 	The navigation will be improved in future releases!</p>
 	<p>Use the open button to play files from your device.</p>
 	<p>Playback can be controlled from the notification, the lock screen

@@ -6,7 +6,7 @@
 	<h2>History</h2>
 	<p>The SAP format was created in the 1990s by Adam Bienias and was intended
 	to be a single format for playback of any Atari 8-bit music on a PC.
-	Adam Bienias has also created the first SAP player for Windows and later published
+	Adam Bienias also created the first SAP player for Windows and later published
 	its source code. Other players appeared later.</p>
 	<p>At the time of writing, there are five independent players of the SAP format:</p>
 	<ul>
@@ -21,11 +21,11 @@
 	Windows-only Altirra is a full emulator of Atari computers.</p>
 
 	<h2>Concept</h2>
-	<p>A SAP file contains the original data and code needed to playback
+	<p>A SAP file contains the original data and code needed to play back
 	the Atari music. SAP players actually run the program contained in the SAP file
 	on an emulated or real (sapemu) 6502 processor.
 	The program controls the POKEY chip, which generates the sound.</p>
-	<p>Same method is used with platforms other than Atari,
+	<p>The same method is used with platforms other than Atari,
 	for example the SID format for the C64 music.</p>
 	<p>Important advantages of SAP over, let's say, MP3, are that
 	SAP files are very small (about 5 KB on average) and play more accurately
@@ -72,12 +72,12 @@ TIME 00:15.40 LOOP
 	<p>It is recommended, but not required, that tags are specified in the order
 	described below. Note that format identification in GStreamer
 	requires the AUTHOR tag to be placed right after the "SAP" line.</p>
-	<p>The arguments to AUTHOR, NAME and DATE must be wrapped in doublequotes.
+	<p>The arguments to AUTHOR, NAME and DATE must be wrapped in double quotes.
 	Allowed are characters which are identical in ASCII and ATASCII (ATari ASCII),
 	that is: characters with ASCII codes from space to underscore
 	plus all lowercase letters, plus the pipe character (`|`).
-	There are no backquote, tilde nor curly brackets in ATASCII.
-	It is recommended to avoid doublequotes inside the arguments,
+	There is no backquote, no tilde, and no curly brackets in ATASCII.
+	It is recommended to avoid double quotes inside the arguments,
 	as not all SAP players handle them.
 	The arguments should be limited to 120 characters (plus the outer quotes).</p>
 	<p>It is strongly recommended that all SAP files contain
@@ -88,15 +88,15 @@ TIME 00:15.40 LOOP
 		<dd>
 			<p>Name of the composer. The name should consist of a real name
 			and optionally a nickname (scene handle, no scene group) in parentheses.
-			If song was composed by many authors, separate them with " &amp; ".
+			If a song was composed by many authors, separate them with " &amp; ".
 			Examples:</p>
 			<pre>AUTHOR "Dariusz Duma (Dhor)"
 AUTHOR "Lukasz Sychowicz (X-Ray) &amp; Piotr Swierszcz (Samurai)"
 AUTHOR "&lt;?&gt; (Trzcinowy Zakapior)"
 AUTHOR "Bill Williams &lt;?&gt;"
 </pre>
-			<p>The last two examples are respecively: known nickname
-			with an unknown real name and an uncertain author.</p>
+			<p>The last two examples are, respectively, a known nickname
+			with an unknown real name, and an uncertain author.</p>
 		</dd>
 
 		<dt>NAME</dt>
@@ -110,7 +110,7 @@ NAME "&lt;?&gt;"
 		<dt>DATE</dt>
 		<dd>
 			<p>Copyright year or year of creation.
-			If exact date is known, it can be included in the DD/MM/YYYY format.
+			If the exact date is known, it can be included in the DD/MM/YYYY format.
 			Examples:</p>
 			<pre>DATE "1986"
 DATE "1993-1994"
@@ -190,7 +190,7 @@ DATE "199?"
 		<dd>
 			<p>Specifies that the file uses the COVOX hardware expansion
 			at the specified hexadecimal address.
-			COVOX offers better quality of digitalized sounds than the POKEY, in stereo.
+			COVOX offers better quality of digitized sounds than the POKEY, in stereo.
 			Currently only ASAP supports this and the only possible address is D600.</p>
 		</dd>
 
@@ -236,8 +236,9 @@ AB CD EF - first block data - loaded to 0x0600-0x0602
 01 42 A3 - second block data - loaded to 0x2025-0x2027
 -------------------------------------------------------------
 
-	<p>Files that end in the middle of block data or the addresses are considered
-	malformed, but some SAP players accept them.</p>
+	<p>Files that end in the middle of the block data, or that end with
+	an incomplete start address, only a start address, or an incomplete end address,
+	are considered malformed, but some SAP players accept them.</p>
 
 	<h2>Execution Model</h2>
 	<p>The program from the SAP file is run inside an emulated machine that resembles
@@ -297,7 +298,7 @@ AB CD EF - first block data - loaded to 0x0600-0x0602
 
 	<p>Timing: The main clock is 1773447 Hz (PAL) or 1789772.5 Hz (NTSC).
 	There are 114 cycles per scanline, including 9 cycles memory refresh
-	when the 6502 is stalled - same as in the Atari with ANTIC DMA
+	when the 6502 is stalled - the same as in the Atari with ANTIC DMA
 	disabled completely. WSYNC and VCOUNT registers may be used for delays.
 	Note that some SAP players reset VCOUNT at the FASTPLAY rate
 	instead of every frame.</p>
@@ -316,7 +317,7 @@ AB CD EF - first block data - loaded to 0x0600-0x0602
 		<dt>TYPE C</dt>
 		<dd>
 			<p>This type is for convenient handling of music
-			composed in CMC (Chaos Music Composer) .
+			composed in CMC (Chaos Music Composer).
 			The player is initialized using the values
 			of MUSIC, PLAYER and DEFSONG as follows:</p>
 			<pre>    lda #$70
@@ -333,9 +334,9 @@ AB CD EF - first block data - loaded to 0x0600-0x0602
 		</dd>
 
 		<dt>TYPE D</dt>
-		<dd>This is similar to TYPE B, but used for digitalized music.
+		<dd>This is similar to TYPE B, but used for digitized music.
 		The difference is that the INIT routine must not return.
-		It should play the digitalized music. It can use WSYNC and VCOUNT registers
+		It should play the digitized music. It can use WSYNC and VCOUNT registers
 		and/or POKEY timer interrupts for timing. The POKEY interrupts
 		can be programmed via IRQEN/IRQST/AUDF1-4/AUDCTL registers,
 		the FFFE/FFFF interrupt vector and the I 6502 flag
@@ -350,7 +351,7 @@ AB CD EF - first block data - loaded to 0x0600-0x0602
 		<dd>This is a convenience type for music composed in SoftSynth.
 		The PLAYER tag is not used here, yet some SAP players require it.
 		Instead of the PLAYER routine, at FASTPLAY intervals the memory location 0x45
-		is decreased and if reaches zero, the memory location 0xB07B is increased.
+		is decreased and if it reaches zero, the memory location 0xB07B is increased.
 		The default FASTPLAY for this type is 78.</dd>
 
 		<dt>TYPE R</dt>
@@ -362,9 +363,9 @@ AB CD EF - first block data - loaded to 0x0600-0x0602
 
 	<p>Game_Music_Emu supports only types B and C.</p>
 	<p>When 6502 routines get called, don't assume register values except for
-	the specified above. For example, don't assume that the INIT routine starts
+	those specified above. For example, don't assume that the INIT routine starts
 	with zero in the X register. Also, don't assume that 6502 registers
-	are unchanged between the calls to PLAYER or from INIT to PLAYER.</p>
+	are unchanged between calls to PLAYER, or between INIT and PLAYER.</p>
 	<p>When starting a song, a SAP player must initialize POKEY registers to:
 	AUDF1-4 = AUDC1-4 = AUDCTL = IRQEN = 0, SKCTL = 3.</p>
 </page>

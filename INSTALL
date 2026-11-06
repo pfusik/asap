@@ -80,7 +80,7 @@ Building the VLC plugin on macOS
 Install the Xcode Command Line Tools.
 
 You need 'vlc_plugin.h' and other header files.
-Unfortunately they are not installed with the VLC on Mac.
+Unfortunately, they are not installed with VLC on Mac.
 You can find them in VLC source code.
 Make sure 'VLC_OSX_CFLAGS' in 'vlc/vlc.mk' points to the directory
 with these header files.
@@ -204,7 +204,7 @@ Open the command prompt in the root directory of ASAP sources and run:
     make javascript
 
 'asap2wav.js' is the command-line script.
-'asapweb.js' plus 'asap.js' are the browser player.
+'asapweb.js' and 'asap.js' make up the browser player.
 
 
 Building Python command-line ASAP2WAV
@@ -214,7 +214,7 @@ Open the command prompt in the root directory of ASAP sources and run:
 
     make python
 
-'asap2wav.py' together with 'asap.py' are the command-line script.
+'asap2wav.py', together with 'asap.py', is the command-line script.
 
 
 Building Swift command-line ASAP2WAV
@@ -238,4 +238,4 @@ Using libasap
 -------------
 
 The library is documented in the 'asap.h' header file.
-Be warned there might be breaking changes in the future versions of the library.
+Be warned that there might be breaking changes in future versions of the library.

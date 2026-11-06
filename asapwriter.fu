@@ -804,7 +804,7 @@ public class ASAPWriter
 	public void Write!(
 		/// Output filename, used to determine the format.
 		string targetFilename,
-		/// File information got from the source file with data updated for the output file.
+		/// File information obtained from the source file, with data updated for the output file.
 		ASAPInfo info,
 		/// Contents of the source file.
 		byte[] module,

@@ -17,6 +17,6 @@
 	<p>For command-line conversions (e.g. to WAV or between SAP and the tracker formats)
 	and editing the metadata, install asapconv: open <code>asap-<version />-macos.dmg</code>
 	then drag <code>asapconv</code> to <code>bin</code>.</p>
-	<p>Run the program from the command prompt to see the syntax.
+	<p>Run the program from the terminal to see the syntax.
 	The <code>-o/--output</code> option selects the output format and is mandatory.</p>
 </page>

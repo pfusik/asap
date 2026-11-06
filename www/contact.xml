@@ -8,7 +8,7 @@
 
 	<h2>For software developers</h2>
 	<p>Download the latest source release: <download prefix="asap-" suffix=".tar.gz" />
-	or <a href="https://github.com/pfusik/asap">browse Git repository</a>.</p>
+	or <a href="https://github.com/pfusik/asap">browse the Git repository</a>.</p>
 	<p>The project is hosted on SourceForge. Check out <a href="https://sourceforge.net/p/asap/">project pages</a>.</p>
 	<p>ASAP is based on a development library, which you can easily embed in your program.
 	It's not only a fully portable C library - it's better than that.
@@ -52,7 +52,7 @@
 	<h2>Third-party projects using ASAP</h2>
 	<p>The following projects already use ASAP:</p>
 	<ul>
-		<li><a href="https://github.com/baktragh/mmSAP">mmSAP</a> - standalone player for GNU/Linux and Windows with GTK+ user interface</li>
+		<li><a href="https://github.com/baktragh/mmSAP">mmSAP</a> - standalone player for GNU/Linux and Windows with a GTK+ user interface</li>
 		<li><a href="https://www.rockbox.org/">Rockbox</a> - open source firmware for MP3 players</li>
 		<li><a href="https://github.com/bzr-player/bzr-player">BZR Player 2</a> - player for Windows and Linux</li>
 		<li>Game Music Gear MX - player for PlayStation Portable</li>

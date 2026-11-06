@@ -1,5 +1,5 @@
 ﻿<page title="Convert">
-	<p>In addition to playback, ASAP features conversion and editing metadata.</p>
+	<p>In addition to playback, ASAP features file conversion and metadata editing.</p>
 
 	<h2>Exporting audio (WAV/MP3)</h2>
 	<p>For playback on devices where ASAP does not run, you need to convert
@@ -24,9 +24,9 @@
 
 	<h2>Exporting to Atari executables (XEX)</h2>
 	<p>If you want to play music on your real Atari 8-bit computer,
-	you can export SAP and the tracker formats to Atari executables (XEX format).</p>
+	you can export SAP files and tracker formats to Atari executables (XEX format).</p>
 	<p>On Windows, you can do this from the File Information window, which is available
-	in the fooobar2000 plugin ("View/ASAP info" from the main menu), XMPlay, Winamp and WASAP.</p>
+	in the foobar2000 plugin ("View/ASAP info" from the main menu), XMPlay, Winamp and WASAP.</p>
 	<img src="info_dlg.png" alt="File Information window" />
 	<p>Click "Save as..." and select "Atari 8-bit executable" as the file type.</p>
 	<p>Alternatively, use the command line:</p>
@@ -41,7 +41,7 @@
 	<p>Atari 8-bit tracker files, such as RMT, can be converted to the SAP format.
 	On Windows, use "Save as..." from the File Information window described above.
 	On any operating system, you can use asapconv.</p>
-	<p>Main reason for such a conversion is the ability to specify metadata.
+	<p>The main reason for such a conversion is the ability to specify metadata.
 	You can type it in the File Information window or specify on the command line:</p>
 	<pre>asapconv -o Komar.sap -a "Lukasz Sychowicz (X-Ray)" -n "Komar" -d "2002" Komar.mpt</pre>
 
@@ -61,7 +61,7 @@
 		<li>the Windows Explorer extension</li>
 	</ul>
 	<p>The File Information window is limited to editing one file at a time.
-	The other methods can modify many files (for example, set the same author), for example:</p>
+	The other methods can modify many files at once (for example, set the same author):</p>
 	<pre>asapconv -o .sap -a "Rob Hubbard" *.sap</pre>
 
 	<h2>Relocating tracker formats</h2>

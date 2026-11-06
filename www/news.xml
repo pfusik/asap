@@ -4,7 +4,7 @@
 			<li>Modules with low memory locations can be played (they are relocated)</li>
 			<li>MPT/MD1/MD2 with ff-ff in the last song line are now accepted (MPT composer bug workaround)</li>
 			<li>Fixed POKEY channels unmuted on rewind (the previous fix in 8.0.0 did not work)</li>
-			<li>Relaxed input WAV freqency range for D15/D8 conversion</li>
+			<li>Relaxed input WAV frequency range for D15/D8 conversion</li>
 			<li>Extended and improved the tests</li>
 			<li>Switched to GitHub.com for code repository, tickets and discussions</li>
 		</ul>
@@ -14,7 +14,7 @@
 		<ul>
 			<li>Single <code>win64.msi</code> installer for 64-bit Windows</li>
 			<li>Playback of D15/D8 samples (each sample is a "subsong")</li>
-			<li>The installer puts the foobar2000 plugin in user's directory (same as the <code>fb2k-component</code> package)</li>
+			<li>The installer puts the foobar2000 plugin in the user's directory (same as the <code>fb2k-component</code> package)</li>
 			<li>The installer registers all the installed plugins for Windows "Open with"</li>
 			<li>Fixed the installer not associating SAP with foobar2000</li>
 			<li>D15/D8 files with trailing garbage are accepted</li>
@@ -27,7 +27,7 @@
 		<ul title="Requested by Peter Dell">
 			<li>Fixed SAP->RMT extraction not working</li>
 			<li>Added a <code>win64.zip</code> package</li>
-			<li>Windows Explorer properties now includes "SAP Date" instead of just "Year"</li>
+			<li>Windows Explorer properties now include "SAP Date" instead of just "Year"</li>
 			<li><code>regsvr32 ASAPShellEx.dll</code> handles all registry entries and the <code>propdesc</code> file</li>
 		</ul>
 		<ul title="Reported by Ciro Scognamiglio">
@@ -81,12 +81,12 @@
 
 	<release version="6.0.0" date="2023-09-21">
 		<ul title="POKEY emulation improvements by Adrian Matoga">
-			<li><a href="https://en.wikipedia.org/wiki/Beat_(acoustics)">Beats</a> using ultrasounds.</li>
+			<li><a href="https://en.wikipedia.org/wiki/Beat_(acoustics)">Beats</a> using ultrasound.</li>
 			<li>POKEY audio nonlinearities.</li>
 			<li>Configurable sample rate.</li>
 		</ul>
 		<ul title="Android">
-			<li>Share song links which can be open in ASAP or a web browser.</li>
+			<li>Share song links which can be opened in ASAP or a web browser.</li>
 			<li>Authors and dates shown in gray on the list.</li>
 		</ul>
 		<ul title="64-bit Windows plugins">
@@ -107,14 +107,14 @@
 			<li>POKEY chip photos in the background. Two POKEYs if playing in stereo!</li>
 			<li>New layout for landscape orientation.</li>
 			<li>Switched to system file picker. Supports local and cloud storage. Removed ZIP, ATR and M3U support.</li>
-			<li>Preliminary support for Android TV. Hardly usable because of no search.</li>
+			<li>Preliminary support for Android TV. Hardly usable because there is no search.</li>
 			<li>New icon.</li>
 		</ul>
 	</release>
 
 	<release version="5.2.0" date="2021-12-08">
 		<ul>
-			<li>Fixed "click" glitches. Depending on the music and the ASAP port, they were happening every dozen of seconds or not at all.</li>
+			<li>Fixed "click" glitches. Depending on the music and the ASAP port, they were happening every dozen seconds or not at all.</li>
 			<li>New XMMS2 plugin. Ubuntu and Fedora packages available.</li>
 			<li>Experimental OpenCL port running on a GPU.</li>
 			<li>Limited memory allocations on loading SAP files.</li>
@@ -124,7 +124,7 @@
 			<li>Control playback from the notification and the lock screen.</li>
 			<li>Voice assistant commands (such as "pause playback", "next song", "seek to one minute"). No voice search yet.</li>
 			<li>Display metadata and control playback via Bluetooth.</li>
-			<li>Pause playback on Bluetooth disconnected.</li>
+			<li>Pause playback when Bluetooth disconnects.</li>
 			<li>Requires Android 5.0+.</li>
 		</ul>
 	</release>
@@ -157,7 +157,7 @@
 		<ul title="Android">
 			<li>Fixed app crashes.</li>
 			<li>Pause playback when another app plays.</li>
-			<li>No longer require phone state permission.</li>
+			<li>No longer requires the phone state permission.</li>
 			<li>Request file permissions only when browsing files.</li>
 			<li>Ability to adjust volume before playback.</li>
 		</ul>
@@ -174,7 +174,7 @@
 			<li>Support high resolutions on Windows.</li>
 			<li>foobar2000 plays non-ASAP files (e.g. MOD) from ATRs.</li>
 			<li>asapconv released on macOS.</li>
-			<li>Extract from SAP and relocate a native module in one go.</li>
+			<li>Extract a native module from a SAP file and relocate it in one go.</li>
 			<li>Fixed a buffer overflow while extracting FC from SAP.</li>
 		</ul>
 	</release>
@@ -192,7 +192,7 @@
 		<ul title="Android changes">
 			<li>Android 4.4 can now read the memory card.</li>
 			<li>Switch to the next song when the current one ends.</li>
-			<li>Fixed playback not resuming after a while of pause.</li>
+			<li>Fixed playback not resuming after being paused for a while.</li>
 			<li>Search files using on-screen keyboard.</li>
 			<li>Removed HTTP playback.</li>
 			<li>Files with duplicate titles were lost in the details view.</li>
@@ -201,7 +201,7 @@
 
 	<release version="3.1.6" date="2014-01-15">
 		<ul title="Android">
-			<li>Given access to the whole filesystem by always starting in the root directory.</li>
+			<li>Gave access to the whole filesystem by always starting in the root directory.</li>
 			<li>Play files from ATR disk images.</li>
 			<li>Display the path in the file selector.</li>
 			<li>Dimmed the background wallpaper.</li>
@@ -235,8 +235,8 @@
 		<ul>
 			<li>Android: plays in background, can switch to the next/previous/random file,
 			opens M3U playlists, file selector can display metadata, "back" returns to parent directory.</li>
-			<li>WASAP fixed to avoid occasional deadlock when opening files during playback.</li>
-			<li>The VLC plugin compiled for OS X.</li>
+			<li>WASAP was fixed to avoid occasional deadlock when opening files during playback.</li>
+			<li>The VLC plugin was compiled for OS X.</li>
 			<li>64-bit RPMs.</li>
 			<li>Fixed time detection for CMS.</li>
 			<li>Windows Explorer displays titles for RMT, TMC, TM2.</li>
@@ -314,7 +314,7 @@
 			<a href="https://bugzilla.gnome.org/show_bug.cgi?id=654295">this bug</a> fixed - that is, 0.10.36 or newer).</li>
 			<li>Converted XEX files disable the built-in BASIC.</li>
 			<li>Converted XEX files clear the I flag for the TYPE D PLAYER routine.</li>
-			<li>Doublequotes and pipes are now allowed characters in the AUTHOR and NAME tags.</li>
+			<li>Double quotes and pipes are now allowed characters in the AUTHOR and NAME tags.</li>
 		</ul>
 	</release>
 
@@ -348,7 +348,7 @@
 			<li>Many fixes in the Android port.</li>
 		</ul>
 		<ul title="Cleanup">
-			<li>Rewritten the ASAP core in the <a href="http://cito.sourceforge.net">Ć programming language</a>.</li>
+			<li>Rewrote the ASAP core in the <a href="http://cito.sourceforge.net">Ć programming language</a>.</li>
 			<li>Removed <code>defaultPlaybackTime</code> and <code>loopPlaybackTime</code> parameters
 			from the applet, Flash Player and Silverlight interfaces.</li>
 		</ul>
@@ -406,8 +406,8 @@
 			<li>Changed the JavaScript interface of the Java applet.</li>
 			<li>Huge changes in the build process: on Unix/Linux it no longer uses
 			the "configure" script and on Windows it uses MinGW for almost all binaries
-			(they are smaller than Visual C++ 2008's, compatible with Windows 9x,
-			wildcards work in ASAP2WAV).</li>
+			(they are smaller than Visual C++ 2008's and compatible with Windows 9x,
+			and wildcards work in ASAP2WAV).</li>
 		</ul>
 	</release>
 

@@ -30,5 +30,5 @@
 	<p>Download the source code <download prefix="asap-" suffix=".tar.gz" />.
 	Inside you will find instructions on how to build a VLC plugin,
 	a <a href="https://moc.daper.net/">MOC</a> plugin, an XMMS plugin
-	and a command-line converter asapconv.</p>
+	and the command-line converter, asapconv.</p>
 </page>

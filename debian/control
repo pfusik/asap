@@ -8,8 +8,8 @@ Build-Depends: debhelper (>= 7), libvlccore-dev, xmms2-dev
 Package: asap
 Architecture: any
 Depends: ${shlibs:Depends}
-Description: Provides "asapconv" command-line converter of Atari 8-bit music
- to WAV files. Supports the following file formats:
+Description: Command-line converter of Atari 8-bit music to WAV files.
+ Supports the following file formats:
  SAP, CMC, CM3, CMR, CMS, DMC, DLT, MPT, MPD, RMT, TMC, TM8, TM2, FC.
 
 Package: asap-dev

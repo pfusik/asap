@@ -51,7 +51,7 @@ void printHelp()
 		"-w          --word-samples     Output 16-bit samples (default)\n" ~
 		"            --raw              Output raw audio (no WAV header)\n" ~
 		"-R RATE     --sample-rate=RATE Set output sample rate to RATE Hz\n" ~
-		"-m CHANNELS --mute=CHANNELS    Mute POKEY chanels (1-8)\n" ~
+		"-m CHANNELS --mute=CHANNELS    Mute POKEY channels (1-8)\n" ~
 		"-h          --help             Display this information\n" ~
 		"-v          --version          Display version information\n"
 	);

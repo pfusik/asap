@@ -189,7 +189,7 @@ static void Cpu6502_Shx(Cpu6502 *self, int addr, int data);
 
 /**
  * Runs 6502 emulation for the specified number of Atari scanlines.
- * Each scanline is 114 cycles of which 9 is taken by ANTIC for memory refresh.
+ * Each scanline is 114 cycles, of which 9 are taken by ANTIC for memory refresh.
  * @param self This <code>Cpu6502</code>.
  */
 static void Cpu6502_DoFrame(Cpu6502 *self, int cycleLimit);
@@ -257,7 +257,7 @@ static void Pokey_AddDelta(Pokey *self, const PokeyPair *pokeys, int cycle, int 
 static void Pokey_AddExternalDelta(Pokey *self, const PokeyPair *pokeys, int cycle, int delta);
 
 /**
- * Fills <code>DeltaBuffer</code> up to <code>cycleLimit</code> basing on current Audf/Audc/Audctl values.
+ * Fills <code>DeltaBuffer</code> up to <code>cycleLimit</code> based on the current Audf/Audc/Audctl values.
  * @param self This <code>Pokey</code>.
  */
 static void Pokey_GenerateUntilCycle(Pokey *self, const PokeyPair *pokeys, int cycleLimit);

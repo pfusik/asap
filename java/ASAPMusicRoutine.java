@@ -60,7 +60,7 @@ public class ASAPMusicRoutine
 	 * The data is in the format of Atari 8-bit executables:
 	 * two <code>0xff</code> bytes followed by multiple blocks loaded
 	 * at different addresses.
-	 * It is not a complete program, there is no init or run address.
+	 * It is not a complete program; there is no init or run address.
 	 * Currently the loading addresses can be as low as <code>0x200</code>
 	 * which normally conflicts with the Atari operating system.
 	 * @see #getBinaryLength()
@@ -99,7 +99,7 @@ public class ASAPMusicRoutine
 	/**
 	 * Returns <code>true</code> if the initialization routine doesn't return
 	 * and actually performs the playback.
-	 * This usually means that the music contains digitalized sounds
+	 * This usually means that the music contains digitized sounds
 	 * and requires full 6502 processing power.
 	 * It is likely that you also need to disable screen DMA
 	 * and operating system interrupts for correct playback.

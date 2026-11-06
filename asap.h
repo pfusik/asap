@@ -213,7 +213,7 @@ void ASAPInfo_Delete(ASAPInfo *self);
 #define ASAPInfo_VERSION "8.0.1"
 
 /**
- * Years ASAP was created in.
+ * Years in which ASAP was created.
  */
 #define ASAPInfo_YEARS "2005-2026"
 
@@ -313,7 +313,7 @@ bool ASAPInfo_SetTitle(ASAPInfo *self, const char *value);
 
 /**
  * Returns music title or filename.
- * If title is unknown returns filename without the path or extension.
+ * If the title is unknown, returns the filename without the path or extension.
  * @param self This <code>ASAPInfo</code>.
  */
 const char *ASAPInfo_GetTitleOrFilename(const ASAPInfo *self);
@@ -607,7 +607,7 @@ int ASAPWriter_GetOutputLength(const ASAPWriter *self);
  * Writes the given module in a possibly different file format.
  * @param self This <code>ASAPWriter</code>.
  * @param targetFilename Output filename, used to determine the format.
- * @param info File information got from the source file with data updated for the output file.
+ * @param info File information obtained from the source file, with data updated for the output file.
  * @param module Contents of the source file.
  * @param moduleLen Length of the source file.
  * @param tag Display information (xex output only).

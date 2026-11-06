@@ -10,7 +10,7 @@
 		For technical details of the format, see the <a href="sap-format.html">SAP specification</a>.</dd>
 
 		<dt>CMC (Chaos Music Composer)</dt>
-		<dd>Atari music editor from early 1990s.</dd>
+		<dd>Atari music editor from the early 1990s.</dd>
 
 		<dt>CM3 (CMC "3/4")</dt>
 		<dd>CMC clone with modified pattern length.</dd>
@@ -22,16 +22,16 @@
 		<dd>Stereo CMC clone.</dd>
 
 		<dt>DMC (CMC DoublePlay)</dt>
-		<dd>CMC clone with the 6502 routine executed at double rate of the original CMC.</dd>
+		<dd>CMC clone with the 6502 routine executed at double the rate of the original CMC.</dd>
 
 		<dt>DLT (Delta Music Composer)</dt>
-		<dd>Atari music editor from 1990s.</dd>
+		<dd>Atari music editor from the 1990s.</dd>
 
 		<dt>FC (Future Composer)</dt>
-		<dd>Atari music editor from 1990s.</dd>
+		<dd>Atari music editor from the 1990s.</dd>
 
 		<dt>MPT (Music ProTracker)</dt>
-		<dd>Atari music editor from 1990s.</dd>
+		<dd>Atari music editor from the 1990s.</dd>
 
 		<dt>MD1 (MPT with 1-channel samples)</dt>
 		<dd>MPT with one channel of samples (in a companion D15 or D8 file).</dd>
@@ -46,13 +46,13 @@
 		<dd>Samples for an MD1 or MD2 module.</dd>
 
 		<dt>MPD (MPT DoublePlay)</dt>
-		<dd>MPT clone with the 6502 routine executed at double rate of the original MPT.</dd>
+		<dd>MPT clone with the 6502 routine executed at double the rate of the original MPT.</dd>
 
 		<dt>RMT (<a href="http://raster.infos.cz/atari/rmt/rmt.htm">Raster Music Tracker</a>)</dt>
 		<dd>Modern Atari music editor running on Windows.</dd>
 
 		<dt>TMC, TM8 (<a href="http://jaskier.atari8.info/">Theta Music Composer</a> 1.x)</dt>
-		<dd>Atari music editor from late 1990s.
+		<dd>Atari music editor from the late 1990s.
 		TM8 means it's stereo (8-channel) music while TMC can be either mono or stereo.
 		ASAP treats both extensions identically and always plays in stereo.</dd>
 

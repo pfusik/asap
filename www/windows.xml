@@ -12,7 +12,7 @@
 	<p>foobar2000 can play directly from ZIP files, so you don't even need to unpack them.
 	The plugin also supports ATR disk images. You can also convert, e.g. to MP3.</p>
 	<p>Some files contain <a href="formats.html#subsongs">subsongs</a>
-	and they appear as separate playlist entries, with same author and title, just different durations.
+	and they appear as separate playlist entries, with the same author and title, just different durations.
 	To add a subsong column, right-click the column header and select "Columns / More...",
 	then "Add new" in "Custom columns". Type "Subsong" as the name and "%subsong%" as the pattern.
 	Then right-click the column header and select "Columns / Subsong".</p>
@@ -57,7 +57,7 @@
 	<img src="wasap.png" alt="WASAP" />
 
 	<h2>Windows Explorer</h2>
-	<p>The Windows Explorer extension provides no playback, only metadata display and editor.</p>
+	<p>The Windows Explorer extension provides no playback, only metadata display and editing.</p>
 	<img src="shellex.png" alt="Windows Explorer" />
 
 	<h2>asapconv</h2>
@@ -67,5 +67,5 @@
 
 	<h2>Manual installation</h2>
 	<p>If you are allergic to installers, download <download prefix="asap-" suffix="-win64.zip" />
-	or <download prefix="asap-" suffix="-win32.zip" /> and extract the files to proper locations.</p>
+	or <download prefix="asap-" suffix="-win32.zip" /> and extract the files to the proper locations.</p>
 </page>

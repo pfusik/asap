@@ -265,7 +265,7 @@ class Cpu6502
 	}
 
 	/// Runs 6502 emulation for the specified number of Atari scanlines.
-	/// Each scanline is 114 cycles of which 9 is taken by ANTIC for memory refresh.
+	/// Each scanline is 114 cycles, of which 9 are taken by ANTIC for memory refresh.
 	internal void DoFrame!(int cycleLimit)
 	{
 		while (Cycle < cycleLimit) {
