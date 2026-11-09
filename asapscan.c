@@ -67,6 +67,7 @@ static void trace_cpu(void);
 static int print_time_at_pc = -1;
 
 static bool acid = false;
+static bool step_player = false;
 static int exit_code = 0;
 
 #include "asap-asapscan.c"
@@ -229,6 +230,7 @@ static void print_help(void)
 		"-u          List used unofficial 6502 instructions and BRK\n"
 		"-b HEXADDR  Print time the given instruction reached\n"
 		"-a          Run Acid800 test\n"
+		"-A          Run Acid800 test, stepping player calls (StepPlayer)\n"
 		"-v          Display version information\n"
 		"Options:\n"
 		"-s SONG     Process the specified subsong (zero-based)\n"
@@ -356,7 +358,12 @@ static void scan_song(int song)
 	for (int i = 0; i < 1 << HASH_BITS; i++)
 		hash_first[i] = -1;
 	for (frame = 0; frame < scan_frames; frame++) {
-		ASAP_Do6502Frame(asap);
+		if (step_player) {
+			for (int cycles = 0; cycles < CYCLES_PER_FRAME; cycles += 114 * ASAPInfo_GetPlayerRateScanlines(&asap->moduleInfo))
+				ASAP_StepPlayer(asap);
+		}
+		else
+			ASAP_Do6502Frame(asap);
 		if (dump) {
 			printf("%6.2f: ", (double) frame * CYCLES_PER_FRAME / MAIN_CLOCK);
 			print_pokey(&asap->pokeys.basePokey);
@@ -510,6 +517,8 @@ int main(int argc, char **argv)
 			song = atoi(argv[++i]);
 		else if (strcmp(argv[i], "-a") == 0)
 			acid = true;
+		else if (strcmp(argv[i], "-A") == 0)
+			acid = step_player = true;
 		else if (strcmp(argv[i], "-v") == 0) {
 			printf("asapscan " ASAPInfo_VERSION "\n");
 			return 0;

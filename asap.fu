@@ -306,6 +306,10 @@ public class ASAP
 	// ANTIC:
 	int NextScanlineCycle;
 	NmiStatus Nmist;
+	/// Cycles of the current video frame emulated by earlier calls of
+	/// `Do6502Cycles` - non-zero only while `StepPlayer` steps a player
+	/// called more than once per frame.
+	int FrameCyclesDone;
 
 	// GTIA:
 	int Consol;
@@ -359,6 +363,9 @@ public class ASAP
 
 	int GetFrameCycles() => ModuleInfo.IsNtsc() ? 262 * 114 : 312 * 114;
 
+	/// The CPU's position within the video frame, which VCOUNT and NMIST report.
+	int GetCycleInFrame() => FrameCyclesDone + Cpu.Cycle;
+
 	internal int PeekHardware(int addr)
 	{
 		switch (addr & 0xff1f) {
@@ -378,7 +385,7 @@ public class ASAP
 			return 0xff;
 		case 0xd40b:
 		case 0xd41b:
-			int cycle = Cpu.Cycle;
+			int cycle = GetCycleInFrame();
 			if (cycle > GetFrameCycles())
 				return 0;
 			return cycle / 228;
@@ -390,7 +397,7 @@ public class ASAP
 			case NmiStatus.WasVBlank:
 				return 0x5f;
 			default: // case NmiStatus.OnVBlank:
-				return Cpu.Cycle < 28291 ? 0x1f : 0x5f;
+				return GetCycleInFrame() < 28291 ? 0x1f : 0x5f;
 			}
 		default:
 			return Cpu.Memory[addr];
@@ -409,7 +416,7 @@ public class ASAP
 			Cpu.Cycle += (x <= 106 ? 106 : 106 + 114) - x;
 		}
 		else if ((addr & 0xff0f) == 0xd40f) {
-			Nmist = Cpu.Cycle < 28292 ? NmiStatus.OnVBlank : NmiStatus.Reset;
+			Nmist = GetCycleInFrame() < 28292 ? NmiStatus.OnVBlank : NmiStatus.Reset;
 		}
 		else if ((addr & 0xff00) == ModuleInfo.GetCovoxAddress()) {
 			addr &= 3;
@@ -568,7 +575,8 @@ public class ASAP
 	{
 		NextEventCycle = 0;
 		NextScanlineCycle = 0;
-		Nmist = Nmist == NmiStatus.Reset ? NmiStatus.OnVBlank : NmiStatus.WasVBlank;
+		if (FrameCyclesDone == 0)
+			Nmist = Nmist == NmiStatus.Reset ? NmiStatus.OnVBlank : NmiStatus.WasVBlank;
 		Cpu.DoFrame(cycles);
 		Cpu.Cycle -= cycles;
 		if (NextPlayerCycle != Pokey.NeverCycle)
@@ -579,6 +587,9 @@ public class ASAP
 			if (i == 0)
 				break;
 		}
+		FrameCyclesDone += cycles;
+		if (FrameCyclesDone >= GetFrameCycles())
+			FrameCyclesDone = 0; // the next call starts a frame - also after a step that ran past the frame's end
 	}
 
 	int Do6502Frame!()
@@ -741,6 +752,7 @@ public class ASAP
 
 		Cpu.Reset();
 		Nmist = NmiStatus.OnVBlank;
+		FrameCyclesDone = 0;
 		Consol = 8;
 		Covox[0] = 0x80;
 		Covox[1] = 0x80;
