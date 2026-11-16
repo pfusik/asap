@@ -294,12 +294,10 @@ enum NmiStatus
 
 /// Atari 8-bit chip music emulator.
 /// This class performs no I/O operations - all music data must be passed in byte arrays.
-public class ASAP
+public class ASAP : Computer
 {
 	/// Default output sample rate.
 	public const int SampleRate = 44100;
-
-	internal int NextEventCycle;
 
 	Cpu6502() Cpu;
 
@@ -333,7 +331,8 @@ public class ASAP
 	public ASAP()
 	{
 		SilenceCycles = 0;
-		Cpu.Asap = this;
+		Cpu.Computer = this;
+		Cpu.Memory = Memory;
 	}
 
 	int CurrentSampleRate = SampleRate;
@@ -359,7 +358,7 @@ public class ASAP
 
 	int GetFrameCycles() => ModuleInfo.IsNtsc() ? 262 * 114 : 312 * 114;
 
-	internal int PeekHardware(int addr)
+	internal override int PeekHardware(int addr)
 	{
 		switch (addr & 0xff1f) {
 		case 0xd014:
@@ -393,11 +392,11 @@ public class ASAP
 				return Cpu.Cycle < 28291 ? 0x1f : 0x5f;
 			}
 		default:
-			return Cpu.Memory[addr];
+			return Memory[addr];
 		}
 	}
 
-	internal void PokeHardware!(int addr, int data)
+	internal override void PokeHardware!(int addr, int data)
 	{
 		if (addr >> 8 == 0xd2) {
 			int t = Pokeys.Poke(addr, data, Cpu.Cycle);
@@ -435,21 +434,21 @@ public class ASAP
 			Consol = data;
 		}
 		else
-			Cpu.Memory[addr] = data;
+			Memory[addr] = data;
 	}
 
 	void StoreJsr!(int addr, int target)
 	{
-		Cpu.Memory[addr] = 0x20; // JSR
-		Cpu.Memory[addr + 1] = target & 0xff;
-		Cpu.Memory[addr + 2] = target >> 8;
+		Memory[addr] = 0x20; // JSR
+		Memory[addr + 1] = target & 0xff;
+		Memory[addr + 2] = target >> 8;
 	}
 
 	void Call6502!(int target)
 	{
 		const int codeAddr = 0xd200;
 		StoreJsr(codeAddr, target);
-		Cpu.Memory[codeAddr + 3] = 0xd2; // escape
+		Memory[codeAddr + 3] = 0xd2; // escape
 		Cpu.Pc = codeAddr;
 	}
 
@@ -457,19 +456,19 @@ public class ASAP
 	{
 		Cpu.PushPc();
 		const int codeAddr = 0xd200;
-		Cpu.Memory[codeAddr] = 0x08; // PHP
-		Cpu.Memory[codeAddr + 1] = 0x48; // PHA
-		Cpu.Memory[codeAddr + 2] = 0x8a; // TXA
-		Cpu.Memory[codeAddr + 3] = 0x48; // PHA
-		Cpu.Memory[codeAddr + 4] = 0x98; // TYA
-		Cpu.Memory[codeAddr + 5] = 0x48; // PHA
+		Memory[codeAddr] = 0x08; // PHP
+		Memory[codeAddr + 1] = 0x48; // PHA
+		Memory[codeAddr + 2] = 0x8a; // TXA
+		Memory[codeAddr + 3] = 0x48; // PHA
+		Memory[codeAddr + 4] = 0x98; // TYA
+		Memory[codeAddr + 5] = 0x48; // PHA
 		StoreJsr(codeAddr + 6, target);
-		Cpu.Memory[codeAddr + 9] = 0x68; // PLA
-		Cpu.Memory[codeAddr + 10] = 0xa8; // TAY
-		Cpu.Memory[codeAddr + 11] = 0x68; // PLA
-		Cpu.Memory[codeAddr + 12] = 0xaa; // TAX
-		Cpu.Memory[codeAddr + 13] = 0x68; // PLA
-		Cpu.Memory[codeAddr + 14] = 0x40; // RTI
+		Memory[codeAddr + 9] = 0x68; // PLA
+		Memory[codeAddr + 10] = 0xa8; // TAY
+		Memory[codeAddr + 11] = 0x68; // PLA
+		Memory[codeAddr + 12] = 0xaa; // TAX
+		Memory[codeAddr + 13] = 0x68; // PLA
+		Memory[codeAddr + 14] = 0x40; // RTI
 		Cpu.Pc = codeAddr;
 	}
 
@@ -494,10 +493,10 @@ public class ASAP
 				Call6502PreservingRegisters(player);
 			break;
 		case ASAPModuleType.SapS:
-			int i = Cpu.Memory[0x45] - 1;
-			Cpu.Memory[0x45] = i & 0xff;
+			int i = Memory[0x45] - 1;
+			Memory[0x45] = i & 0xff;
 			if (i == 0)
-				Cpu.Memory[0xb07b] = (Cpu.Memory[0xb07b] + 1) & 0xff;
+				Memory[0xb07b] = (Memory[0xb07b] + 1) & 0xff;
 			break;
 #if !ASAP_ONLY_SAP
 		case ASAPModuleType.Dlt:
@@ -515,7 +514,7 @@ public class ASAP
 			break;
 		case ASAPModuleType.Tmc:
 			if (--TmcPerFrameCounter <= 0) {
-				TmcPerFrameCounter = Cpu.Memory[ModuleInfo.Music + 0x1f];
+				TmcPerFrameCounter = Memory[ModuleInfo.Music + 0x1f];
 				Call6502(player + 3);
 			}
 			else
@@ -523,9 +522,9 @@ public class ASAP
 			break;
 		case ASAPModuleType.D15:
 			if (Cpu.Cycle < ASAPInfo.MptSamplesVblkPauseScanlines * 114 // pause samples every frame
-			 || MptSamplesCurrentAddress >> 8 >= Cpu.Memory[ModuleInfo.Music + 0x10 + CurrentSong]) // sample finished?
+			 || MptSamplesCurrentAddress >> 8 >= Memory[ModuleInfo.Music + 0x10 + CurrentSong]) // sample finished?
 				break;
-			int b = Cpu.Memory[MptSamplesCurrentAddress];
+			int b = Memory[MptSamplesCurrentAddress];
 			if (MptSamplesSecondNibble) {
 				MptSamplesCurrentAddress++;
 				MptSamplesSecondNibble = false;
@@ -544,9 +543,9 @@ public class ASAP
 		}
 	}
 
-	internal bool IsIrq() => Pokeys.BasePokey.Irqst != 0xff;
+	internal override bool IsIrq() => Pokeys.BasePokey.Irqst != 0xff;
 
-	internal void HandleEvent!()
+	internal override void HandleEvent!()
 	{
 		int cycle = Cpu.Cycle;
 		if (cycle >= NextScanlineCycle) {
@@ -642,18 +641,18 @@ public class ASAP
 	{
 #endif
 		ModuleInfo.Load(filename, module, moduleLen);
-		Cpu.Memory.Fill(0);
+		Memory.Fill(0);
 		int music = ModuleInfo.Music;
 #if !ASAP_ONLY_SAP
 		if (ModuleInfo.Type == ASAPModuleType.D15) {
-			module.CopyTo(0, Cpu.Memory, music, moduleLen);
+			module.CopyTo(0, Memory, music, moduleLen);
 			return;
 		}
 		byte[]? playerRoutine = ASAP6502.GetPlayerRoutine(ModuleInfo);
 		if (playerRoutine != null) {
 			int player = ASAPInfo.GetWord(playerRoutine, 2);
 			if (ModuleInfo.Type == ASAPModuleType.Fc)
-				module.CopyTo(0, Cpu.Memory, music, moduleLen);
+				module.CopyTo(0, Memory, music, moduleLen);
 			else {
 				int musicLow = ModuleInfo.Type == ASAPModuleType.Tm2 ? 0x1400 : 0x1000; // must be synchronized with 6502/*.lst
 				if (music < musicLow)
@@ -668,14 +667,14 @@ public class ASAP
 					samples.Relocate(music, music + moduleLen - 5);
 					MptSamplesPage = samples.Content[0];
 					MptSamples15kHz = samples.Is15kHz;
-					samples.Content.CopyTo(0, Cpu.Memory, (MptSamplesPage << 8) - 0x20, samples.ContentLength);
+					samples.Content.CopyTo(0, Memory, (MptSamplesPage << 8) - 0x20, samples.ContentLength);
 				}
 #endif
-				ASAPModuleTransfer() trans = { Source = module, SourceOffset = 0, Output = Cpu.Memory, OutputOffset = music };
+				ASAPModuleTransfer() trans = { Source = module, SourceOffset = 0, Output = Memory, OutputOffset = music };
 				trans.TransferModule(ModuleInfo, moduleLen, false, false);
 			}
 			int playerLastByte = ASAPInfo.GetWord(playerRoutine, 4);
-			playerRoutine.CopyTo(6, Cpu.Memory, player, playerLastByte + 1 - player);
+			playerRoutine.CopyTo(6, Memory, player, playerLastByte + 1 - player);
 			if (ModuleInfo.Player < 0)
 				ModuleInfo.Player = player;
 			return;
@@ -688,7 +687,7 @@ public class ASAP
 			if (blockLen <= 0 || moduleIndex + blockLen > moduleLen)
 				throw ASAPFormatException("Invalid binary block");
 			moduleIndex += 4;
-			module.CopyTo(moduleIndex, Cpu.Memory, startAddr, blockLen);
+			module.CopyTo(moduleIndex, Memory, startAddr, blockLen);
 			moduleIndex += blockLen;
 			if (moduleIndex == moduleLen)
 				return;
@@ -710,10 +709,10 @@ public class ASAP
 		Cpu.Y = y & 0xff;
 		const int escapeAddr = 0xd200;
 		// escape code
-		Cpu.Memory[escapeAddr] = 0xd2;
+		Memory[escapeAddr] = 0xd2;
 		// return address points to the escape code
-		Cpu.Memory[0x1fe] = (escapeAddr - 1) & 0xff;
-		Cpu.Memory[0x1ff] = (escapeAddr - 1) >> 8;
+		Memory[0x1fe] = (escapeAddr - 1) & 0xff;
+		Memory[0x1ff] = (escapeAddr - 1) >> 8;
 		Cpu.S = 0xfd;
 		for (int frame = 0; frame < 50; frame++) {
 			Do6502Frame();
@@ -803,16 +802,16 @@ public class ASAP
 			Do6502Init(player, CurrentSong, 0, 0);
 			break;
 		case ASAPModuleType.D15:
-			MptSamplesCurrentAddress = Cpu.Memory[ModuleInfo.Music + CurrentSong] << 8;
+			MptSamplesCurrentAddress = Memory[ModuleInfo.Music + CurrentSong] << 8;
 			MptSamplesSecondNibble = false;
 			// make 6502 idle
 			const int escapeAddr = 0xd200;
-			Cpu.Memory[escapeAddr] = 0xd2;
+			Memory[escapeAddr] = 0xd2;
 			Cpu.Pc = escapeAddr;
 			break;
 #if EXPERIMENTAL_XEX
 		case ASAPModuleType.Xex:
-			Cpu.Pc = ASAPInfo.GetWord(Cpu.Memory, 0x2e0);
+			Cpu.Pc = ASAPInfo.GetWord(Memory, 0x2e0);
 			Cpu.A = CurrentSong;
 			Cpu.X = 0x00;
 			Cpu.Y = 0x00;
