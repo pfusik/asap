@@ -9,6 +9,7 @@ typedef struct ASAPFileLoader ASAPFileLoader;
 typedef struct ASAP ASAP;
 typedef struct ASAPInfo ASAPInfo;
 typedef struct ASAPWriter ASAPWriter;
+typedef struct Computer Computer;
 
 /**
  * Format of output samples.
