@@ -294,12 +294,10 @@ enum NmiStatus
 
 /// Atari 8-bit chip music emulator.
 /// This class performs no I/O operations - all music data must be passed in byte arrays.
-public class ASAP
+public class ASAP : Computer
 {
 	/// Default output sample rate.
 	public const int SampleRate = 44100;
-
-	internal int NextEventCycle;
 
 	Cpu6502() Cpu;
 
@@ -333,7 +331,7 @@ public class ASAP
 	public ASAP()
 	{
 		SilenceCycles = 0;
-		Cpu.Asap = this;
+		Cpu.Computer = this;
 	}
 
 	int CurrentSampleRate = SampleRate;
@@ -359,7 +357,7 @@ public class ASAP
 
 	int GetFrameCycles() => ModuleInfo.IsNtsc() ? 262 * 114 : 312 * 114;
 
-	internal int PeekHardware(int addr)
+	internal override int PeekHardware(int addr)
 	{
 		switch (addr & 0xff1f) {
 		case 0xd014:
@@ -397,7 +395,7 @@ public class ASAP
 		}
 	}
 
-	internal void PokeHardware!(int addr, int data)
+	internal override void PokeHardware!(int addr, int data)
 	{
 		if (addr >> 8 == 0xd2) {
 			int t = Pokeys.Poke(addr, data, Cpu.Cycle);
@@ -544,9 +542,9 @@ public class ASAP
 		}
 	}
 
-	internal bool IsIrq() => Pokeys.BasePokey.Irqst != 0xff;
+	internal override bool IsIrq() => Pokeys.BasePokey.Irqst != 0xff;
 
-	internal void HandleEvent!()
+	internal override void HandleEvent!()
 	{
 		int cycle = Cpu.Cycle;
 		if (cycle >= NextScanlineCycle) {

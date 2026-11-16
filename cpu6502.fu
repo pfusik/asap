@@ -42,9 +42,28 @@
 
 // Emulation of POKEY timer interrupts is included.
 
+/// The machine around the CPU: its hardware registers, interrupts and timed events.
+public abstract class Computer
+{
+	/// The cycle at which the CPU calls `HandleEvent`.
+	internal int NextEventCycle;
+
+	/// Reads a hardware register ($D000-$D7FF).
+	internal abstract int PeekHardware(int addr);
+
+	/// Writes a hardware register ($D000-$D7FF).
+	internal abstract void PokeHardware!(int addr, int data);
+
+	/// Returns true if an IRQ is pending.
+	internal abstract bool IsIrq();
+
+	/// Handles the events due at the CPU's cycle and sets `NextEventCycle`.
+	internal abstract void HandleEvent!();
+}
+
 class Cpu6502
 {
-	internal ASAP!? Asap;
+	internal Computer!? Computer;
 	internal byte[65536] Memory;
 	internal int Cycle;
 
@@ -73,7 +92,7 @@ class Cpu6502
 	int Peek(int addr)
 	{
 		if ((addr & 0xf900) == 0xd000)
-			return Asap.PeekHardware(addr);
+			return Computer.PeekHardware(addr);
 		else
 			return Memory[addr];
 	}
@@ -81,7 +100,7 @@ class Cpu6502
 	void Poke!(int addr, int data)
 	{
 		if ((addr & 0xf900) == 0xd000)
-			Asap.PokeHardware(addr, data);
+			Computer.PokeHardware(addr, data);
 		else
 			Memory[addr] = data;
 	}
@@ -90,8 +109,8 @@ class Cpu6502
 	{
 		if (addr >> 8 == 0xd2) {
 			Cycle--;
-			int data = Asap.PeekHardware(addr);
-			Asap.PokeHardware(addr, data);
+			int data = Computer.PeekHardware(addr);
+			Computer.PokeHardware(addr, data);
 			Cycle++;
 			return data;
 		}
@@ -247,7 +266,7 @@ class Cpu6502
 
 	void CheckIrq!()
 	{
-		if ((Vdi & IFlag) == 0 && Asap.IsIrq()) {
+		if ((Vdi & IFlag) == 0 && Computer.IsIrq()) {
 			Cycle += 7;
 			ExecuteIrq(0x20); // B flag clear
 		}
@@ -270,8 +289,8 @@ class Cpu6502
 	{
 		while (Cycle < cycleLimit) {
 
-			if (Cycle >= Asap.NextEventCycle) {
-				Asap.HandleEvent();
+			if (Cycle >= Computer.NextEventCycle) {
+				Computer.HandleEvent();
 				CheckIrq();
 			}
 #if ASAPSCAN
@@ -344,7 +363,7 @@ class Cpu6502
 			case 0xd2:
 			case 0xf2:
 				Pc--;
-				Cycle = Asap.NextEventCycle;
+				Cycle = Computer.NextEventCycle;
 				continue;
 			case 0x04: // NOP ab [unofficial]
 			case 0x44:
