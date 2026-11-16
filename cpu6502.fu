@@ -45,6 +45,9 @@
 /// The machine around the CPU: its hardware registers, interrupts and timed events.
 public abstract class Computer
 {
+	/// The 64K address space. The CPU accesses it through `Cpu6502.Memory`.
+	internal byte[65536] Memory;
+
 	/// The cycle at which the CPU calls `HandleEvent`.
 	internal int NextEventCycle;
 
@@ -64,7 +67,8 @@ public abstract class Computer
 class Cpu6502
 {
 	internal Computer!? Computer;
-	internal byte[65536] Memory;
+	/// `Computer.Memory`, referenced here for fast access.
+	internal byte[]!? Memory;
 	internal int Cycle;
 
 	internal int Pc;

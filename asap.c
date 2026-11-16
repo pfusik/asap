@@ -145,6 +145,10 @@ typedef struct {
 struct Computer {
 	const ComputerVtbl *vtbl;
 	/**
+	 * The 64K address space. The CPU accesses it through <code>Cpu6502.Memory</code>.
+	 */
+	uint8_t memory[65536];
+	/**
 	 * The cycle at which the CPU calls <code>HandleEvent</code>.
 	 */
 	int nextEventCycle;
@@ -152,7 +156,10 @@ struct Computer {
 
 struct Cpu6502 {
 	Computer *computer;
-	uint8_t memory[65536];
+	/**
+	 * <code>Computer.Memory</code>, referenced here for fast access.
+	 */
+	uint8_t *memory;
 	int cycle;
 	int pc;
 	int a;
@@ -2519,6 +2526,7 @@ static void ASAP_Construct(ASAP *self)
 	self->currentSampleRate = 44100;
 	self->silenceCycles = 0;
 	self->cpu.computer = &self->base;
+	self->cpu.memory = self->base.memory;
 }
 
 static void ASAP_Destruct(ASAP *self)
@@ -2598,7 +2606,7 @@ static int ASAP_PeekHardware(const ASAP *self, int addr)
 			return self->cpu.cycle < 28291 ? 31 : 95;
 		}
 	default:
-		return self->cpu.memory[addr];
+		return self->base.memory[addr];
 	}
 }
 
@@ -2637,39 +2645,39 @@ static void ASAP_PokeHardware(ASAP *self, int addr, int data)
 		self->consol = data;
 	}
 	else
-		self->cpu.memory[addr] = (uint8_t) data;
+		self->base.memory[addr] = (uint8_t) data;
 }
 
 static void ASAP_StoreJsr(ASAP *self, int addr, int target)
 {
-	self->cpu.memory[addr] = 32;
-	self->cpu.memory[addr + 1] = (uint8_t) target;
-	self->cpu.memory[addr + 2] = (uint8_t) (target >> 8);
+	self->base.memory[addr] = 32;
+	self->base.memory[addr + 1] = (uint8_t) target;
+	self->base.memory[addr + 2] = (uint8_t) (target >> 8);
 }
 
 static void ASAP_Call6502(ASAP *self, int target)
 {
 	ASAP_StoreJsr(self, 53760, target);
-	self->cpu.memory[53763] = 210;
+	self->base.memory[53763] = 210;
 	self->cpu.pc = 53760;
 }
 
 static void ASAP_Call6502PreservingRegisters(ASAP *self, int target)
 {
 	Cpu6502_PushPc(&self->cpu);
-	self->cpu.memory[53760] = 8;
-	self->cpu.memory[53761] = 72;
-	self->cpu.memory[53762] = 138;
-	self->cpu.memory[53763] = 72;
-	self->cpu.memory[53764] = 152;
-	self->cpu.memory[53765] = 72;
+	self->base.memory[53760] = 8;
+	self->base.memory[53761] = 72;
+	self->base.memory[53762] = 138;
+	self->base.memory[53763] = 72;
+	self->base.memory[53764] = 152;
+	self->base.memory[53765] = 72;
 	ASAP_StoreJsr(self, 53766, target);
-	self->cpu.memory[53769] = 104;
-	self->cpu.memory[53770] = 168;
-	self->cpu.memory[53771] = 104;
-	self->cpu.memory[53772] = 170;
-	self->cpu.memory[53773] = 104;
-	self->cpu.memory[53774] = 64;
+	self->base.memory[53769] = 104;
+	self->base.memory[53770] = 168;
+	self->base.memory[53771] = 104;
+	self->base.memory[53772] = 170;
+	self->base.memory[53773] = 104;
+	self->base.memory[53774] = 64;
 	self->cpu.pc = 53760;
 }
 
@@ -2693,10 +2701,10 @@ static void ASAP_Call6502Player(ASAP *self)
 		break;
 	case ASAPModuleType_SAP_S:
 		;
-		int i = self->cpu.memory[69] - 1;
-		self->cpu.memory[69] = (uint8_t) i;
+		int i = self->base.memory[69] - 1;
+		self->base.memory[69] = (uint8_t) i;
 		if (i == 0)
-			self->cpu.memory[45179] = (uint8_t) (self->cpu.memory[45179] + 1);
+			self->base.memory[45179] = (uint8_t) (self->base.memory[45179] + 1);
 		break;
 	case ASAPModuleType_DLT:
 		ASAP_Call6502(self, player + 259);
@@ -2713,16 +2721,16 @@ static void ASAP_Call6502Player(ASAP *self)
 		break;
 	case ASAPModuleType_TMC:
 		if (--self->tmcPerFrameCounter <= 0) {
-			self->tmcPerFrameCounter = self->cpu.memory[self->moduleInfo.music + 31];
+			self->tmcPerFrameCounter = self->base.memory[self->moduleInfo.music + 31];
 			ASAP_Call6502(self, player + 3);
 		}
 		else
 			ASAP_Call6502(self, player + 6);
 		break;
 	case ASAPModuleType_D15:
-		if (self->cpu.cycle < 1254 || self->mptSamplesCurrentAddress >> 8 >= self->cpu.memory[self->moduleInfo.music + 16 + self->currentSong])
+		if (self->cpu.cycle < 1254 || self->mptSamplesCurrentAddress >> 8 >= self->base.memory[self->moduleInfo.music + 16 + self->currentSong])
 			break;
-		int b = self->cpu.memory[self->mptSamplesCurrentAddress];
+		int b = self->base.memory[self->mptSamplesCurrentAddress];
 		if (self->mptSamplesSecondNibble) {
 			self->mptSamplesCurrentAddress++;
 			self->mptSamplesSecondNibble = false;
@@ -2815,17 +2823,17 @@ bool ASAP_LoadWithExtraFiles(ASAP *self, const char *filename, uint8_t const *mo
 {
 	if (!ASAPInfo_Load(&self->moduleInfo, filename, module, moduleLen))
 		return false;
-	memset(self->cpu.memory, 0, sizeof(self->cpu.memory));
+	memset(self->base.memory, 0, sizeof(self->base.memory));
 	int music = self->moduleInfo.music;
 	if (self->moduleInfo.type == ASAPModuleType_D15) {
-		memcpy(self->cpu.memory + music, module, moduleLen);
+		memcpy(self->base.memory + music, module, moduleLen);
 		return true;
 	}
 	uint8_t const *playerRoutine = ASAP6502_GetPlayerRoutine(&self->moduleInfo);
 	if (playerRoutine != NULL) {
 		int player = ASAPInfo_GetWord(playerRoutine, 2);
 		if (self->moduleInfo.type == ASAPModuleType_FC)
-			memcpy(self->cpu.memory + music, module, moduleLen);
+			memcpy(self->base.memory + music, module, moduleLen);
 		else {
 			int musicLow = self->moduleInfo.type == ASAPModuleType_TM2 ? 5120 : 4096;
 			if (music < musicLow)
@@ -2839,17 +2847,17 @@ bool ASAP_LoadWithExtraFiles(ASAP *self, const char *filename, uint8_t const *mo
 				ASAPMptSamples_Relocate(&samples, music, music + moduleLen - 5);
 				self->mptSamplesPage = samples.content[0];
 				self->mptSamples15kHz = samples.is15kHz;
-				memcpy(self->cpu.memory + ((self->mptSamplesPage << 8) - 32), samples.content, samples.contentLength);
+				memcpy(self->base.memory + ((self->mptSamplesPage << 8) - 32), samples.content, samples.contentLength);
 			}
 			ASAPModuleTransfer trans;
 			trans.source = module;
 			trans.sourceOffset = 0;
-			trans.output = self->cpu.memory;
+			trans.output = self->base.memory;
 			trans.outputOffset = music;
 			ASAPModuleTransfer_TransferModule(&trans, &self->moduleInfo, moduleLen, false, false);
 		}
 		int playerLastByte = ASAPInfo_GetWord(playerRoutine, 4);
-		memcpy(self->cpu.memory + player, playerRoutine + 6, playerLastByte + 1 - player);
+		memcpy(self->base.memory + player, playerRoutine + 6, playerLastByte + 1 - player);
 		if (self->moduleInfo.player < 0)
 			self->moduleInfo.player = player;
 		return true;
@@ -2861,7 +2869,7 @@ bool ASAP_LoadWithExtraFiles(ASAP *self, const char *filename, uint8_t const *mo
 		if (blockLen <= 0 || moduleIndex + blockLen > moduleLen)
 			return false;
 		moduleIndex += 4;
-		memcpy(self->cpu.memory + startAddr, module + moduleIndex, blockLen);
+		memcpy(self->base.memory + startAddr, module + moduleIndex, blockLen);
 		moduleIndex += blockLen;
 		if (moduleIndex == moduleLen)
 			return true;
@@ -2882,9 +2890,9 @@ static bool ASAP_Do6502Init(ASAP *self, int pc, int a, int x, int y)
 	self->cpu.a = a & 255;
 	self->cpu.x = x & 255;
 	self->cpu.y = y & 255;
-	self->cpu.memory[53760] = 210;
-	self->cpu.memory[510] = 255;
-	self->cpu.memory[511] = 209;
+	self->base.memory[53760] = 210;
+	self->base.memory[510] = 255;
+	self->base.memory[511] = 209;
 	self->cpu.s = 253;
 	for (int frame = 0; frame < 50; frame++) {
 		ASAP_Do6502Frame(self);
@@ -2978,9 +2986,9 @@ static bool ASAP_RestartSong(ASAP *self, int muteMask)
 			return false;
 		break;
 	case ASAPModuleType_D15:
-		self->mptSamplesCurrentAddress = self->cpu.memory[self->moduleInfo.music + self->currentSong] << 8;
+		self->mptSamplesCurrentAddress = self->base.memory[self->moduleInfo.music + self->currentSong] << 8;
 		self->mptSamplesSecondNibble = false;
-		self->cpu.memory[53760] = 210;
+		self->base.memory[53760] = 210;
 		self->cpu.pc = 53760;
 		break;
 	}
