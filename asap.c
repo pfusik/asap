@@ -2266,7 +2266,7 @@ static void ASAPModuleTransfer_WriteByte(ASAPModuleTransfer *self, int value)
 
 static void ASAPModuleTransfer_WriteWord(ASAPModuleTransfer *self, int value)
 {
-	ASAPModuleTransfer_WriteByte(self, value & 255);
+	ASAPModuleTransfer_WriteByte(self, value & 0xff);
 	ASAPModuleTransfer_WriteByte(self, value >> 8);
 }
 
@@ -2295,9 +2295,9 @@ static void ASAPModuleTransfer_RelocateBytes(ASAPModuleTransfer *self, int lowOf
 	highOffset += self->sourceOffset;
 	for (int i = 0; i < count; i++) {
 		int address = self->source[lowOffset + i] + (self->source[highOffset + i] << 8);
-		if (address != 0 && address != 65535)
+		if (address != 0 && address != 0xffff)
 			address += self->addressDiff;
-		ASAPModuleTransfer_WriteByte(self, address >> shift & 255);
+		ASAPModuleTransfer_WriteByte(self, address >> shift & 0xff);
 	}
 	self->sourceOffset += count;
 }
@@ -2312,7 +2312,7 @@ static void ASAPModuleTransfer_RelocateWords(ASAPModuleTransfer *self, int count
 {
 	while (--count >= 0) {
 		int address = ASAPModuleTransfer_ReadWord(self);
-		if (address != 0 && address != 65535)
+		if (address != 0 && address != 0xffff)
 			address += self->addressDiff;
 		ASAPModuleTransfer_WriteWord(self, address);
 	}
@@ -2325,7 +2325,7 @@ static void ASAPModuleTransfer_TransferModule(ASAPModuleTransfer *self, const AS
 	int endAddr = ASAPModuleTransfer_ReadWord(self);
 	self->addressDiff = info->music < 0 ? 0 : info->music - startAddr;
 	if (header) {
-		ASAPModuleTransfer_WriteWord(self, 65535);
+		ASAPModuleTransfer_WriteWord(self, 0xffff);
 		ASAPModuleTransfer_WriteWord(self, startAddr + self->addressDiff);
 		ASAPModuleTransfer_WriteWord(self, endAddr + self->addressDiff);
 	}
@@ -2360,7 +2360,7 @@ static void ASAPModuleTransfer_TransferModule(ASAPModuleTransfer *self, const AS
 		for (int ch = 0; ch < 4; ch++) {
 			int address = self->source[self->sourceOffset + ch] + (self->source[self->sourceOffset + 4 + ch] << 8) + self->addressDiff;
 			trackAddr[ch] = address;
-			ASAPModuleTransfer_WriteByte(self, address & 255);
+			ASAPModuleTransfer_WriteByte(self, address & 0xff);
 		}
 		for (int ch = 0; ch < 4; ch++)
 			ASAPModuleTransfer_WriteByte(self, trackAddr[ch] >> 8);
@@ -2377,7 +2377,7 @@ static void ASAPModuleTransfer_TransferModule(ASAPModuleTransfer *self, const AS
 				else {
 					ASAPModuleTransfer_Copy(self, track0Len);
 					for (; trackLen > track0Len; trackLen--)
-						ASAPModuleTransfer_WriteByte(self, 255);
+						ASAPModuleTransfer_WriteByte(self, 0xff);
 				}
 			}
 		}
@@ -2396,7 +2396,7 @@ static void ASAPModuleTransfer_TransferModule(ASAPModuleTransfer *self, const AS
 		int songEnd = endAddr + 1 - startAddr + startOffset;
 		while (self->sourceOffset < songEnd) {
 			int songLineLen = FuInt_Min(channels, songEnd - self->sourceOffset);
-			if (songLineLen >= 4 && self->source[self->sourceOffset] == 254) {
+			if (songLineLen >= 4 && self->source[self->sourceOffset] == 0xfe) {
 				ASAPModuleTransfer_Copy(self, 2);
 				ASAPModuleTransfer_RelocateWords(self, 1);
 				songLineLen -= 4;
@@ -2415,7 +2415,7 @@ static void ASAPModuleTransfer_TransferModule(ASAPModuleTransfer *self, const AS
 		break;
 	case ASAPModuleType_TM2:
 		ASAPModuleTransfer_Copy(self, 128);
-		ASAPModuleTransfer_RelocateBytes(self, 0, 640, 128, 0);
+		ASAPModuleTransfer_RelocateBytes(self, 0, 0x280, 128, 0);
 		ASAPModuleTransfer_RelocateLowHigh(self, 256);
 		ASAPModuleTransfer_RelocateBytes(self, -640, 0, 128, 8);
 		break;
@@ -2456,7 +2456,7 @@ static bool ASAPMptSamples_DoLoad(ASAPMptSamples *self, const ASAPFileLoader *lo
 			return false;
 		}
 	}
-	bool returnValue = self->contentLength >= ((end - self->content[0]) << 8) + 32;
+	bool returnValue = self->contentLength >= ((end - self->content[0]) << 8) + 0x20;
 	free(filename);
 	return returnValue;
 }
@@ -2477,10 +2477,10 @@ static bool ASAPMptSamples_Load(ASAPMptSamples *self, const ASAPFileLoader *load
 
 static void ASAPMptSamples_Relocate(ASAPMptSamples *self, int music, int musicLast)
 {
-	int start = (self->content[0] << 8) - 32;
-	if ((musicLast < start || music >= start + self->contentLength) && start >= 3840)
+	int start = (self->content[0] << 8) - 0x20;
+	if ((musicLast < start || music >= start + self->contentLength) && start >= 0xf00)
 		return;
-	int h = 4064 + self->contentLength <= music ? 16 : (53280 - self->contentLength) >> 8;
+	int h = 0xfe0 + self->contentLength <= music ? 0x10 : (0xd020 - self->contentLength) >> 8;
 	h -= self->content[0];
 	for (int i = 0; i < 32; i++) {
 		if (self->content[i] != 0)
@@ -2541,37 +2541,37 @@ static int ASAP_GetFrameCycles(const ASAP *self)
 
 static int ASAP_PeekHardware(const ASAP *self, int addr)
 {
-	switch (addr & 65311) {
-	case 53268:
-		return ASAPInfo_IsNtsc(&self->moduleInfo) ? 15 : 1;
-	case 53279:
-		return ~self->consol & 15;
-	case 53770:
-	case 53786:
-	case 53774:
-	case 53790:
+	switch (addr & 0xff1f) {
+	case 0xd014:
+		return ASAPInfo_IsNtsc(&self->moduleInfo) ? 0xf : 1;
+	case 0xd01f:
+		return ~self->consol & 0xf;
+	case 0xd20a:
+	case 0xd21a:
+	case 0xd20e:
+	case 0xd21e:
 		return PokeyPair_Peek(&self->pokeys, addr, self->cpu.cycle);
-	case 53772:
-	case 53788:
-	case 53775:
-	case 53791:
-		return 255;
-	case 54283:
-	case 54299:
+	case 0xd20c:
+	case 0xd21c:
+	case 0xd20f:
+	case 0xd21f:
+		return 0xff;
+	case 0xd40b:
+	case 0xd41b:
 		;
 		int cycle = self->cpu.cycle;
 		if (cycle > ASAP_GetFrameCycles(self))
 			return 0;
 		return cycle / 228;
-	case 54287:
-	case 54303:
+	case 0xd40f:
+	case 0xd41f:
 		switch (self->nmist) {
 		case NmiStatus_RESET:
-			return 31;
+			return 0x1f;
 		case NmiStatus_WAS_V_BLANK:
-			return 95;
+			return 0x5f;
 		default:
-			return self->cpu.cycle < 28291 ? 31 : 95;
+			return self->cpu.cycle < 28291 ? 0x1f : 0x5f;
 		}
 	default:
 		return self->cpu.memory[addr];
@@ -2580,19 +2580,19 @@ static int ASAP_PeekHardware(const ASAP *self, int addr)
 
 static void ASAP_PokeHardware(ASAP *self, int addr, int data)
 {
-	if (addr >> 8 == 210) {
+	if (addr >> 8 == 0xd2) {
 		int t = PokeyPair_Poke(&self->pokeys, addr, data, self->cpu.cycle);
 		if (self->nextEventCycle > t)
 			self->nextEventCycle = t;
 	}
-	else if ((addr & 65295) == 54282) {
+	else if ((addr & 0xff0f) == 0xd40a) {
 		int x = self->cpu.cycle % 114;
 		self->cpu.cycle += (x <= 106 ? 106 : 220) - x;
 	}
-	else if ((addr & 65295) == 54287) {
+	else if ((addr & 0xff0f) == 0xd40f) {
 		self->nmist = self->cpu.cycle < 28292 ? NmiStatus_ON_V_BLANK : NmiStatus_RESET;
 	}
-	else if ((addr & 65280) == ASAPInfo_GetCovoxAddress(&self->moduleInfo)) {
+	else if ((addr & 0xff00) == ASAPInfo_GetCovoxAddress(&self->moduleInfo)) {
 		addr &= 3;
 		Pokey *pokey = addr == 0 || addr == 3 ? &self->pokeys.basePokey : &self->pokeys.extraPokey;
 		int delta = data - self->covox[addr];
@@ -2602,7 +2602,7 @@ static void ASAP_PokeHardware(ASAP *self, int addr, int data)
 			self->gtiaOrCovoxPlayedThisFrame = true;
 		}
 	}
-	else if ((addr & 65311) == 53279) {
+	else if ((addr & 0xff1f) == 0xd01f) {
 		int delta = ((self->consol & 8) - (data & 8)) << 20;
 		if (delta != 0) {
 			int cycle = self->cpu.cycle;
@@ -2618,35 +2618,35 @@ static void ASAP_PokeHardware(ASAP *self, int addr, int data)
 
 static void ASAP_StoreJsr(ASAP *self, int addr, int target)
 {
-	self->cpu.memory[addr] = 32;
+	self->cpu.memory[addr] = 0x20;
 	self->cpu.memory[addr + 1] = (uint8_t) target;
 	self->cpu.memory[addr + 2] = (uint8_t) (target >> 8);
 }
 
 static void ASAP_Call6502(ASAP *self, int target)
 {
-	ASAP_StoreJsr(self, 53760, target);
-	self->cpu.memory[53763] = 210;
-	self->cpu.pc = 53760;
+	ASAP_StoreJsr(self, 0xd200, target);
+	self->cpu.memory[53763] = 0xd2;
+	self->cpu.pc = 0xd200;
 }
 
 static void ASAP_Call6502PreservingRegisters(ASAP *self, int target)
 {
 	Cpu6502_PushPc(&self->cpu);
-	self->cpu.memory[53760] = 8;
-	self->cpu.memory[53761] = 72;
-	self->cpu.memory[53762] = 138;
-	self->cpu.memory[53763] = 72;
-	self->cpu.memory[53764] = 152;
-	self->cpu.memory[53765] = 72;
+	self->cpu.memory[0xd200] = 0x8;
+	self->cpu.memory[53761] = 0x48;
+	self->cpu.memory[53762] = 0x8a;
+	self->cpu.memory[53763] = 0x48;
+	self->cpu.memory[53764] = 0x98;
+	self->cpu.memory[53765] = 0x48;
 	ASAP_StoreJsr(self, 53766, target);
-	self->cpu.memory[53769] = 104;
-	self->cpu.memory[53770] = 168;
-	self->cpu.memory[53771] = 104;
-	self->cpu.memory[53772] = 170;
-	self->cpu.memory[53773] = 104;
-	self->cpu.memory[53774] = 64;
-	self->cpu.pc = 53760;
+	self->cpu.memory[53769] = 0x68;
+	self->cpu.memory[53770] = 0xa8;
+	self->cpu.memory[53771] = 0x68;
+	self->cpu.memory[53772] = 0xaa;
+	self->cpu.memory[53773] = 0x68;
+	self->cpu.memory[53774] = 0x40;
+	self->cpu.pc = 0xd200;
 }
 
 static void ASAP_Call6502Player(ASAP *self)
@@ -2669,13 +2669,13 @@ static void ASAP_Call6502Player(ASAP *self)
 		break;
 	case ASAPModuleType_SAP_S:
 		;
-		int i = self->cpu.memory[69] - 1;
-		self->cpu.memory[69] = (uint8_t) i;
+		int i = self->cpu.memory[0x45] - 1;
+		self->cpu.memory[0x45] = (uint8_t) i;
 		if (i == 0)
-			self->cpu.memory[45179] = (uint8_t) (self->cpu.memory[45179] + 1);
+			self->cpu.memory[0xb07b] = (uint8_t) (self->cpu.memory[0xb07b] + 1);
 		break;
 	case ASAPModuleType_DLT:
-		ASAP_Call6502(self, player + 259);
+		ASAP_Call6502(self, player + 0x103);
 		break;
 	case ASAPModuleType_MPT:
 	case ASAPModuleType_RMT:
@@ -2689,14 +2689,14 @@ static void ASAP_Call6502Player(ASAP *self)
 		break;
 	case ASAPModuleType_TMC:
 		if (--self->tmcPerFrameCounter <= 0) {
-			self->tmcPerFrameCounter = self->cpu.memory[self->moduleInfo.music + 31];
+			self->tmcPerFrameCounter = self->cpu.memory[self->moduleInfo.music + 0x1f];
 			ASAP_Call6502(self, player + 3);
 		}
 		else
 			ASAP_Call6502(self, player + 6);
 		break;
 	case ASAPModuleType_D15:
-		if (self->cpu.cycle < 1254 || self->mptSamplesCurrentAddress >> 8 >= self->cpu.memory[self->moduleInfo.music + 16 + self->currentSong])
+		if (self->cpu.cycle < 1254 || self->mptSamplesCurrentAddress >> 8 >= self->cpu.memory[self->moduleInfo.music + 0x10 + self->currentSong])
 			break;
 		int b = self->cpu.memory[self->mptSamplesCurrentAddress];
 		if (self->mptSamplesSecondNibble) {
@@ -2707,14 +2707,14 @@ static void ASAP_Call6502Player(ASAP *self)
 			b >>= 4;
 			self->mptSamplesSecondNibble = true;
 		}
-		PokeyPair_Poke(&self->pokeys, 53761, b | 240, self->cpu.cycle);
+		PokeyPair_Poke(&self->pokeys, 0xd201, b | 0xf0, self->cpu.cycle);
 		break;
 	}
 }
 
 static bool ASAP_IsIrq(const ASAP *self)
 {
-	return self->pokeys.basePokey.irqst != 255;
+	return self->pokeys.basePokey.irqst != 0xff;
 }
 
 static void ASAP_HandleEvent(ASAP *self)
@@ -2742,7 +2742,7 @@ static void ASAP_Do6502Cycles(ASAP *self, int cycles)
 	self->nmist = self->nmist == NmiStatus_RESET ? NmiStatus_ON_V_BLANK : NmiStatus_WAS_V_BLANK;
 	Cpu6502_DoFrame(&self->cpu, cycles);
 	self->cpu.cycle -= cycles;
-	if (self->nextPlayerCycle != 8388608)
+	if (self->nextPlayerCycle != 0x800000)
 		self->nextPlayerCycle -= cycles;
 	for (int i = 3;; i >>= 1) {
 		PokeyChannel_EndFrame(&self->pokeys.basePokey.channels[i], cycles);
@@ -2803,7 +2803,7 @@ bool ASAP_LoadWithExtraFiles(ASAP *self, const char *filename, uint8_t const *mo
 		if (self->moduleInfo.type == ASAPModuleType_FC)
 			memcpy(self->cpu.memory + music, module, moduleLen);
 		else {
-			int musicLow = self->moduleInfo.type == ASAPModuleType_TM2 ? 5120 : 4096;
+			int musicLow = self->moduleInfo.type == ASAPModuleType_TM2 ? 0x1400 : 0x1000;
 			if (music < musicLow)
 				self->moduleInfo.music = music = musicLow;
 			if (self->moduleInfo.type == ASAPModuleType_MD1 || self->moduleInfo.type == ASAPModuleType_MD2) {
@@ -2815,7 +2815,7 @@ bool ASAP_LoadWithExtraFiles(ASAP *self, const char *filename, uint8_t const *mo
 				ASAPMptSamples_Relocate(&samples, music, music + moduleLen - 5);
 				self->mptSamplesPage = samples.content[0];
 				self->mptSamples15kHz = samples.is15kHz;
-				memcpy(self->cpu.memory + ((self->mptSamplesPage << 8) - 32), samples.content, samples.contentLength);
+				memcpy(self->cpu.memory + ((self->mptSamplesPage << 8) - 0x20), samples.content, samples.contentLength);
 			}
 			ASAPModuleTransfer trans;
 			trans.source = module;
@@ -2841,7 +2841,7 @@ bool ASAP_LoadWithExtraFiles(ASAP *self, const char *filename, uint8_t const *mo
 		moduleIndex += blockLen;
 		if (moduleIndex == moduleLen)
 			return true;
-		if (moduleIndex + 7 <= moduleLen && module[moduleIndex] == 255 && module[moduleIndex + 1] == 255)
+		if (moduleIndex + 7 <= moduleLen && module[moduleIndex] == 0xff && module[moduleIndex + 1] == 0xff)
 			moduleIndex += 2;
 	}
 	return false;
@@ -2855,16 +2855,16 @@ const ASAPInfo *ASAP_GetInfo(const ASAP *self)
 static bool ASAP_Do6502Init(ASAP *self, int pc, int a, int x, int y)
 {
 	self->cpu.pc = pc;
-	self->cpu.a = a & 255;
-	self->cpu.x = x & 255;
-	self->cpu.y = y & 255;
-	self->cpu.memory[53760] = 210;
-	self->cpu.memory[510] = 255;
-	self->cpu.memory[511] = 209;
-	self->cpu.s = 253;
+	self->cpu.a = a & 0xff;
+	self->cpu.x = x & 0xff;
+	self->cpu.y = y & 0xff;
+	self->cpu.memory[0xd200] = 0xd2;
+	self->cpu.memory[0x1fe] = 255;
+	self->cpu.memory[0x1ff] = 209;
+	self->cpu.s = 0xfd;
 	for (int frame = 0; frame < 50; frame++) {
 		ASAP_Do6502Frame(self);
-		if (self->cpu.pc == 53760)
+		if (self->cpu.pc == 0xd200)
 			return true;
 	}
 	return false;
@@ -2878,18 +2878,18 @@ void ASAP_MutePokeyChannels(ASAP *self, int mask)
 
 static bool ASAP_RestartSong(ASAP *self, int muteMask)
 {
-	self->nextPlayerCycle = 8388608;
+	self->nextPlayerCycle = 0x800000;
 	self->blocksPlayed = 0;
 	self->silenceCyclesCounter = self->silenceCycles;
 	Cpu6502_Reset(&self->cpu);
 	self->nmist = NmiStatus_ON_V_BLANK;
 	self->consol = 8;
-	self->covox[0] = 128;
-	self->covox[1] = 128;
-	self->covox[2] = 128;
-	self->covox[3] = 128;
+	self->covox[0] = 0x80;
+	self->covox[1] = 0x80;
+	self->covox[2] = 0x80;
+	self->covox[3] = 0x80;
 	PokeyPair_Initialize(&self->pokeys, ASAPInfo_IsNtsc(&self->moduleInfo), ASAPInfo_GetChannels(&self->moduleInfo) > 1, self->currentSampleRate);
-	ASAP_MutePokeyChannels(self, 255);
+	ASAP_MutePokeyChannels(self, 0xff);
 	int player = self->moduleInfo.player;
 	int music = self->moduleInfo.music;
 	switch (self->moduleInfo.type) {
@@ -2902,40 +2902,40 @@ static bool ASAP_RestartSong(ASAP *self, int muteMask)
 	case ASAPModuleType_CM3:
 	case ASAPModuleType_CMR:
 	case ASAPModuleType_CMS:
-		if (!ASAP_Do6502Init(self, player + 3, 112, music, music >> 8))
+		if (!ASAP_Do6502Init(self, player + 3, 0x70, music, music >> 8))
 			return false;
-		if (!ASAP_Do6502Init(self, player + 3, 0, self->currentSong, 0))
+		if (!ASAP_Do6502Init(self, player + 3, 0x0, self->currentSong, 0))
 			return false;
 		break;
 	case ASAPModuleType_SAP_D:
 	case ASAPModuleType_SAP_S:
 		self->cpu.pc = ASAPInfo_GetInitAddress(&self->moduleInfo);
 		self->cpu.a = self->currentSong;
-		self->cpu.x = 0;
-		self->cpu.y = 0;
-		self->cpu.s = 255;
+		self->cpu.x = 0x0;
+		self->cpu.y = 0x0;
+		self->cpu.s = 0xff;
 		break;
 	case ASAPModuleType_DLT:
-		if (!ASAP_Do6502Init(self, player + 256, 0, 0, self->moduleInfo.songPos[self->currentSong]))
+		if (!ASAP_Do6502Init(self, player + 0x100, 0x0, 0x0, self->moduleInfo.songPos[self->currentSong]))
 			return false;
 		break;
 	case ASAPModuleType_MPT:
 	case ASAPModuleType_MD1:
 	case ASAPModuleType_MD2:
-		if (!ASAP_Do6502Init(self, player, 0, music >> 8, music))
+		if (!ASAP_Do6502Init(self, player, 0x0, music >> 8, music))
 			return false;
 		if (self->moduleInfo.type != ASAPModuleType_MPT) {
-			if (!ASAP_Do6502Init(self, player, 3, self->mptSamplesPage - 1, 224))
+			if (!ASAP_Do6502Init(self, player, 0x3, self->mptSamplesPage - 1, 0xe0))
 				return false;
 		}
-		if (!ASAP_Do6502Init(self, player, 2, self->moduleInfo.songPos[self->currentSong], 0))
+		if (!ASAP_Do6502Init(self, player, 0x2, self->moduleInfo.songPos[self->currentSong], 0))
 			return false;
 		if (self->moduleInfo.type == ASAPModuleType_MPT)
 			break;
 		self->cpu.pc = player;
-		self->cpu.a = self->moduleInfo.type == ASAPModuleType_MD1 ? 5 : 6;
+		self->cpu.a = self->moduleInfo.type == ASAPModuleType_MD1 ? 0x5 : 0x6;
 		self->cpu.x = self->mptSamples15kHz ? 1 : 0;
-		self->cpu.s = 255;
+		self->cpu.s = 0xff;
 		break;
 	case ASAPModuleType_RMT:
 		if (!ASAP_Do6502Init(self, player, self->moduleInfo.songPos[self->currentSong], music, music >> 8))
@@ -2943,9 +2943,9 @@ static bool ASAP_RestartSong(ASAP *self, int muteMask)
 		break;
 	case ASAPModuleType_TMC:
 	case ASAPModuleType_TM2:
-		if (!ASAP_Do6502Init(self, player, 112, music >> 8, music))
+		if (!ASAP_Do6502Init(self, player, 0x70, music >> 8, music))
 			return false;
-		if (!ASAP_Do6502Init(self, player, 0, self->currentSong, 0))
+		if (!ASAP_Do6502Init(self, player, 0x0, self->currentSong, 0))
 			return false;
 		self->tmcPerFrameCounter = 1;
 		break;
@@ -2956,8 +2956,8 @@ static bool ASAP_RestartSong(ASAP *self, int muteMask)
 	case ASAPModuleType_D15:
 		self->mptSamplesCurrentAddress = self->cpu.memory[self->moduleInfo.music + self->currentSong] << 8;
 		self->mptSamplesSecondNibble = false;
-		self->cpu.memory[53760] = 210;
-		self->cpu.pc = 53760;
+		self->cpu.memory[0xd200] = 0xd2;
+		self->cpu.pc = 0xd200;
 		break;
 	}
 	ASAP_MutePokeyChannels(self, muteMask);
@@ -3122,7 +3122,7 @@ int ASAP_Generate(ASAP *self, uint8_t *buffer, int bufferLen, ASAPSampleFormat f
 int ASAP_GetPokeyChannelVolume(const ASAP *self, int channel)
 {
 	const Pokey *pokey = (channel & 4) == 0 ? &self->pokeys.basePokey : &self->pokeys.extraPokey;
-	return pokey->channels[channel & 3].audc & 15;
+	return pokey->channels[channel & 3].audc & 0xf;
 }
 
 void ASAP_StepPlayer(ASAP *self)
@@ -3275,11 +3275,11 @@ static int ASAPInfo_GetWord(uint8_t const *array, int i)
 
 static bool ASAPInfo_ParseModule(ASAPInfo *self, uint8_t const *module, int moduleLen)
 {
-	if ((module[0] != 255 || module[1] != 255) && (module[0] != 0 || module[1] != 0))
+	if ((module[0] != 0xff || module[1] != 0xff) && (module[0] != 0 || module[1] != 0))
 		return false;
 	self->music = ASAPInfo_GetWord(module, 2);
 	int musicLastByte = ASAPInfo_GetWord(module, 4);
-	if (self->music <= 55295 && musicLastByte >= 53248)
+	if (self->music <= 0xd7ff && musicLastByte >= 0xd000)
 		return false;
 	int blockLen = musicLastByte + 1 - self->music;
 	if (6 + blockLen != moduleLen) {
@@ -3303,15 +3303,15 @@ static void ASAPInfo_AddSong(ASAPInfo *self, int playerCalls)
 
 static void ASAPInfo_ParseCmcSong(ASAPInfo *self, uint8_t const *module, int pos)
 {
-	int tempo = module[25];
+	int tempo = module[0x19];
 	int playerCalls = 0;
 	int repStartPos = 0;
 	int repEndPos = 0;
 	int repTimes = 0;
 	uint8_t seen[85] = { 0 };
-	while (pos >= 0 && pos < 85) {
+	while (pos >= 0 && pos < 0x55) {
 		if (pos == repEndPos && repTimes > 0) {
-			for (int i = 0; i < 85; i++)
+			for (int i = 0; i < 0x55; i++)
 				if (seen[i] == 1 || seen[i] == 3)
 					seen[i] = 0;
 			repTimes--;
@@ -3323,23 +3323,23 @@ static void ASAPInfo_ParseCmcSong(ASAPInfo *self, uint8_t const *module, int pos
 			break;
 		}
 		seen[pos] = 1;
-		int p1 = module[518 + pos];
-		int p2 = module[603 + pos];
-		int p3 = module[688 + pos];
-		if (p1 == 254 || p2 == 254 || p3 == 254) {
+		int p1 = module[0x206 + pos];
+		int p2 = module[0x25b + pos];
+		int p3 = module[0x2b0 + pos];
+		if (p1 == 0xfe || p2 == 0xfe || p3 == 0xfe) {
 			pos++;
 			continue;
 		}
-		p1 |= self->type == ASAPModuleType_CMS ? 7 : 15;
+		p1 |= self->type == ASAPModuleType_CMS ? 7 : 0xf;
 		switch (p1) {
-		case 135:
-		case 167:
+		case 0x87:
+		case 0xa7:
 			pos++;
 			break;
-		case 143:
+		case 0x8f:
 			pos = -1;
 			break;
-		case 151:
+		case 0x97:
 			if (p2 < 128) {
 				playerCalls += p2;
 				if (p3 < 128)
@@ -3347,16 +3347,16 @@ static void ASAPInfo_ParseCmcSong(ASAPInfo *self, uint8_t const *module, int pos
 			}
 			pos++;
 			break;
-		case 159:
+		case 0x9f:
 			pos = p2;
 			break;
-		case 175:
+		case 0xaf:
 			pos -= p2;
 			break;
-		case 191:
+		case 0xbf:
 			pos += p2;
 			break;
-		case 207:
+		case 0xcf:
 			if (p2 < 128) {
 				tempo = p2;
 				pos++;
@@ -3364,19 +3364,19 @@ static void ASAPInfo_ParseCmcSong(ASAPInfo *self, uint8_t const *module, int pos
 			else
 				pos = -1;
 			break;
-		case 223:
+		case 0xdf:
 			pos++;
 			repStartPos = pos;
 			repEndPos = pos + p2;
 			repTimes = p3 - 1;
 			break;
-		case 239:
+		case 0xef:
 			self->loops[self->songs] = true;
 			pos = -1;
 			break;
 		default:
 			p2 = repTimes > 0 ? 3 : 2;
-			for (p1 = 0; p1 < 85; p1++)
+			for (p1 = 0; p1 < 0x55; p1++)
 				if (seen[p1] == 1)
 					seen[p1] = (uint8_t) p2;
 			playerCalls += tempo * (self->type == ASAPModuleType_CM3 ? 48 : 64);
@@ -3389,40 +3389,40 @@ static void ASAPInfo_ParseCmcSong(ASAPInfo *self, uint8_t const *module, int pos
 
 static bool ASAPInfo_ParseCmc(ASAPInfo *self, uint8_t const *module, int moduleLen, ASAPModuleType type)
 {
-	if (moduleLen < 774)
+	if (moduleLen < 0x306)
 		return false;
 	self->originalType = self->type = type;
 	if (!ASAPInfo_ParseModule(self, module, moduleLen))
 		return false;
-	int lastPos = 84;
+	int lastPos = 0x54;
 	while (--lastPos >= 0) {
-		if (module[518 + lastPos] < 176 || module[603 + lastPos] < 64 || module[688 + lastPos] < 64)
+		if (module[0x206 + lastPos] < 0xb0 || module[0x25b + lastPos] < 0x40 || module[0x2b0 + lastPos] < 0x40)
 			break;
 		if (self->channels == 2) {
-			if (module[774 + lastPos] < 176 || module[859 + lastPos] < 64 || module[944 + lastPos] < 64)
+			if (module[0x306 + lastPos] < 0xb0 || module[0x35b + lastPos] < 0x40 || module[0x3b0 + lastPos] < 0x40)
 				break;
 		}
 	}
 	self->songs = 0;
 	ASAPInfo_ParseCmcSong(self, module, 0);
 	for (int pos = 0; pos < lastPos && self->songs < 32; pos++)
-		if (module[518 + pos] == 143 || module[518 + pos] == 239)
+		if (module[0x206 + pos] == 0x8f || module[0x206 + pos] == 0xef)
 			ASAPInfo_ParseCmcSong(self, module, pos + 1);
 	return true;
 }
 
 static bool ASAPInfo_IsDltTrackEmpty(uint8_t const *module, int pos)
 {
-	return module[8198 + pos] >= 67 && module[8454 + pos] >= 64 && module[8710 + pos] >= 64 && module[8966 + pos] >= 64;
+	return module[0x2006 + pos] >= 0x43 && module[0x2106 + pos] >= 0x40 && module[0x2206 + pos] >= 0x40 && module[0x2306 + pos] >= 0x40;
 }
 
 static bool ASAPInfo_IsDltPatternEnd(uint8_t const *module, int pos, int i)
 {
 	for (int ch = 0; ch < 4; ch++) {
-		int pattern = module[8198 + (ch << 8) + pos];
+		int pattern = module[0x2006 + (ch << 8) + pos];
 		if (pattern < 64) {
 			int offset = 6 + (pattern << 7) + (i << 1);
-			if ((module[offset] & 128) == 0 && (module[offset + 1] & 128) != 0)
+			if ((module[offset] & 0x80) == 0 && (module[offset + 1] & 0x80) != 0)
 				return true;
 		}
 	}
@@ -3443,13 +3443,13 @@ static void ASAPInfo_ParseDltSong(ASAPInfo *self, uint8_t const *module, bool *s
 			break;
 		}
 		seen[pos] = true;
-		int p1 = module[8198 + pos];
-		if (p1 == 64 || ASAPInfo_IsDltTrackEmpty(module, pos))
+		int p1 = module[0x2006 + pos];
+		if (p1 == 0x40 || ASAPInfo_IsDltTrackEmpty(module, pos))
 			break;
-		if (p1 == 65)
-			pos = module[8326 + pos];
-		else if (p1 == 66)
-			tempo = module[8326 + pos++];
+		if (p1 == 0x41)
+			pos = module[0x2086 + pos];
+		else if (p1 == 0x42)
+			tempo = module[0x2086 + pos++];
 		else {
 			for (int i = 0; i < 64 && !ASAPInfo_IsDltPatternEnd(module, pos, i); i++)
 				playerCalls += tempo;
@@ -3464,12 +3464,12 @@ static void ASAPInfo_ParseDltSong(ASAPInfo *self, uint8_t const *module, bool *s
 
 static bool ASAPInfo_ParseDlt(ASAPInfo *self, uint8_t const *module, int moduleLen)
 {
-	if (moduleLen != 11270 && moduleLen != 11271)
+	if (moduleLen != 0x2c06 && moduleLen != 0x2c07)
 		return false;
 	self->originalType = self->type = ASAPModuleType_DLT;
 	if (!ASAPInfo_ParseModule(self, module, moduleLen))
 		return false;
-	if (self->music != 8192)
+	if (self->music != 0x2000)
 		return false;
 	bool seen[128] = { false };
 	self->songs = 0;
@@ -3484,12 +3484,12 @@ static bool ASAPInfo_ParseDlt(ASAPInfo *self, uint8_t const *module, int moduleL
 
 static int ASAPInfo_GetMptTrackAddress(uint8_t const *module, int ch)
 {
-	return module[454 + ch] + (module[458 + ch] << 8);
+	return module[0x1c6 + ch] + (module[0x1ca + ch] << 8);
 }
 
 static int ASAPInfo_GetMptFirstInstrOrPatternAddr(uint8_t const *module)
 {
-	for (int offset = 6; offset < 198; offset += 2) {
+	for (int offset = 6; offset < 0xc6; offset += 2) {
 		int addr = ASAPInfo_GetWord(module, offset);
 		if (addr != 0)
 			return addr;
@@ -3513,7 +3513,7 @@ static int ASAPInfo_SafeGetByte(uint8_t const *module, int moduleLen, int i)
 static bool ASAPInfo_ParseMptSong(ASAPInfo *self, uint8_t const *module, int moduleLen, bool *globalSeen, int songLen, int pos)
 {
 	int addrToOffset = ASAPInfo_GetWord(module, 2) - 6 - self->mptSongBugExtra;
-	int tempo = module[463];
+	int tempo = module[0x1cf];
 	int playerCalls = 0;
 	uint8_t seen[256] = { 0 };
 	int patternOffset[4];
@@ -3527,9 +3527,9 @@ static bool ASAPInfo_ParseMptSong(ASAPInfo *self, uint8_t const *module, int mod
 		}
 		seen[pos] = 1;
 		globalSeen[pos] = true;
-		int i = module[464 + (pos << 1)];
-		if (i == 255) {
-			pos = module[465 + (pos << 1)];
+		int i = module[0x1d0 + (pos << 1)];
+		if (i == 0xff) {
+			pos = module[0x1d1 + (pos << 1)];
 			continue;
 		}
 		int ch;
@@ -3537,11 +3537,11 @@ static bool ASAPInfo_ParseMptSong(ASAPInfo *self, uint8_t const *module, int mod
 			if (self->mptSongBugExtra == 0)
 				i = ASAPInfo_GetMptTrackAddress(module, ch) - addrToOffset;
 			else
-				i = 464 + ch * ASAPInfo_GetMptTrackLen(module, 0);
+				i = 0x1d0 + ch * ASAPInfo_GetMptTrackLen(module, 0);
 			i = module[i + (pos << 1)];
-			if (i >= 64)
+			if (i >= 0x40)
 				break;
-			i = ASAPInfo_GetWord(module, 70 + (i << 1));
+			i = ASAPInfo_GetWord(module, 0x46 + (i << 1));
 			patternOffset[ch] = i == 0 ? 0 : i - addrToOffset;
 			blankRowsCounter[ch] = 0;
 		}
@@ -3550,7 +3550,7 @@ static bool ASAPInfo_ParseMptSong(ASAPInfo *self, uint8_t const *module, int mod
 		for (i = 0; i < songLen; i++)
 			if (seen[i] == 1)
 				seen[i] = 2;
-		for (int patternRows = module[462]; --patternRows >= 0;) {
+		for (int patternRows = module[0x1ce]; --patternRows >= 0;) {
 			for (ch = 3; ch >= 0; ch--) {
 				if (patternOffset[ch] == 0)
 					continue;
@@ -3559,18 +3559,18 @@ static bool ASAPInfo_ParseMptSong(ASAPInfo *self, uint8_t const *module, int mod
 				for (;;) {
 					if ((i = ASAPInfo_SafeGetByte(module, moduleLen, patternOffset[ch]++)) == -1)
 						return false;
-					if (i < 64 || i == 254)
+					if (i < 0x40 || i == 0xfe)
 						break;
-					if (i < 128)
+					if (i < 0x80)
 						continue;
-					if (i < 192) {
-						blankRows[ch] = i - 128;
+					if (i < 0xc0) {
+						blankRows[ch] = i - 0x80;
 						continue;
 					}
-					if (i < 208)
+					if (i < 0xd0)
 						continue;
-					if (i < 224) {
-						tempo = i - 207;
+					if (i < 0xe0) {
+						tempo = i - 0xcf;
 						continue;
 					}
 					patternRows = 0;
@@ -3588,17 +3588,17 @@ static bool ASAPInfo_ParseMptSong(ASAPInfo *self, uint8_t const *module, int mod
 
 static bool ASAPInfo_ParseMpt(ASAPInfo *self, uint8_t const *module, int moduleLen, ASAPModuleType type)
 {
-	if (moduleLen < 464)
+	if (moduleLen < 0x1d0)
 		return false;
 	self->originalType = self->type = type;
 	int track0Len = ASAPInfo_GetMptTrackLen(module, 0);
 	self->mptSongBugExtra = 7 + ASAPInfo_GetWord(module, 4) - ASAPInfo_GetWord(module, 2) == moduleLen ? 0 : 3 * track0Len + ASAPInfo_GetMptTrackAddress(module, 1) - ASAPInfo_GetMptFirstInstrOrPatternAddr(module);
 	if (!ASAPInfo_ParseModule(self, module, moduleLen - self->mptSongBugExtra))
 		return false;
-	if (ASAPInfo_GetMptTrackAddress(module, 0) != ASAPInfo_GetWord(module, 2) + 458)
+	if (ASAPInfo_GetMptTrackAddress(module, 0) != ASAPInfo_GetWord(module, 2) + 0x1ca)
 		return false;
 	int songLen = track0Len >> 1;
-	if (songLen > 254)
+	if (songLen > 0xfe)
 		return false;
 	bool globalSeen[256] = { false };
 	self->songs = 0;
@@ -3617,11 +3617,11 @@ static bool ASAPInfo_ParseMpt(ASAPInfo *self, uint8_t const *module, int moduleL
 static int ASAPInfo_GetRmtInstrumentFrames(uint8_t const *module, int instrument, int volume, int volumeFrame, bool onExtraPokey)
 {
 	int addrToOffset = ASAPInfo_GetWord(module, 2) - 6;
-	instrument = ASAPInfo_GetWord(module, 14) - addrToOffset + (instrument << 1);
+	instrument = ASAPInfo_GetWord(module, 0xe) - addrToOffset + (instrument << 1);
 	if (module[instrument + 1] == 0)
 		return 0;
 	instrument = ASAPInfo_GetWord(module, instrument) - addrToOffset;
-	int perFrame = module[12];
+	int perFrame = module[0xc];
 	int playerCall = volumeFrame * perFrame;
 	int playerCalls = playerCall;
 	int index = module[instrument] + 1 + playerCall * 3;
@@ -3639,7 +3639,7 @@ static int ASAPInfo_GetRmtInstrumentFrames(uint8_t const *module, int instrument
 			int vol = module[instrument + index];
 			if (onExtraPokey)
 				vol >>= 4;
-			if ((vol & 15) >= RMT_VOLUME_SILENT[volume])
+			if ((vol & 0xf) >= RMT_VOLUME_SILENT[volume])
 				playerCalls = playerCall + 1;
 			playerCall++;
 			index += 3;
@@ -3660,7 +3660,7 @@ static int ASAPInfo_GetRmtInstrumentFrames(uint8_t const *module, int instrument
 		int vol = module[instrument + index];
 		if (onExtraPokey)
 			vol >>= 4;
-		if ((vol & 15) >= RMT_VOLUME_SILENT[volume]) {
+		if ((vol & 0xf) >= RMT_VOLUME_SILENT[volume]) {
 			playerCalls = playerCall + 1;
 			silentLoop = false;
 		}
@@ -3679,11 +3679,11 @@ static int ASAPInfo_GetRmtInstrumentFrames(uint8_t const *module, int instrument
 static bool ASAPInfo_ParseRmtSong(ASAPInfo *self, uint8_t const *module, int moduleLen, bool *globalSeen, int songLen, int posShift, int pos)
 {
 	int addrToOffset = ASAPInfo_GetWord(module, 2) - 6;
-	int tempo = module[11];
+	int tempo = module[0xb];
 	int frames = 0;
-	int songOffset = ASAPInfo_GetWord(module, 20) - addrToOffset;
-	int patternLoOffset = ASAPInfo_GetWord(module, 16) - addrToOffset;
-	int patternHiOffset = ASAPInfo_GetWord(module, 18) - addrToOffset;
+	int songOffset = ASAPInfo_GetWord(module, 0x14) - addrToOffset;
+	int patternLoOffset = ASAPInfo_GetWord(module, 0x10) - addrToOffset;
+	int patternHiOffset = ASAPInfo_GetWord(module, 0x12) - addrToOffset;
 	uint8_t seen[256] = { 0 };
 	int patternBegin[8];
 	int patternOffset[8];
@@ -3700,13 +3700,13 @@ static bool ASAPInfo_ParseRmtSong(ASAPInfo *self, uint8_t const *module, int mod
 		}
 		seen[pos] = 1;
 		globalSeen[pos] = true;
-		if (module[songOffset + (pos << posShift)] == 254) {
+		if (module[songOffset + (pos << posShift)] == 0xfe) {
 			pos = module[songOffset + (pos << posShift) + 1];
 			continue;
 		}
 		for (int ch = 0; ch < 1 << posShift; ch++) {
 			int p = module[songOffset + (pos << posShift) + ch];
-			if (p == 255)
+			if (p == 0xff)
 				blankRows[ch] = 256;
 			else {
 				patternOffset[ch] = patternBegin[ch] = module[patternLoOffset + p] + (module[patternHiOffset + p] << 8) - addrToOffset;
@@ -3718,7 +3718,7 @@ static bool ASAPInfo_ParseRmtSong(ASAPInfo *self, uint8_t const *module, int mod
 		for (int i = 0; i < songLen; i++)
 			if (seen[i] == 1)
 				seen[i] = 2;
-		for (int patternRows = module[10]; --patternRows >= 0;) {
+		for (int patternRows = module[0xa]; --patternRows >= 0;) {
 			for (int ch = 0; ch < 1 << posShift; ch++) {
 				if (--blankRows[ch] > 0)
 					continue;
@@ -3726,16 +3726,16 @@ static bool ASAPInfo_ParseRmtSong(ASAPInfo *self, uint8_t const *module, int mod
 					int i = ASAPInfo_SafeGetByte(module, moduleLen, patternOffset[ch]++);
 					if (i == -1)
 						return false;
-					if ((i & 63) < 62) {
+					if ((i & 0x3f) < 62) {
 						int hi = ASAPInfo_SafeGetByte(module, moduleLen, patternOffset[ch]++);
 						if (hi == -1)
 							return false;
 						i += hi << 8;
-						if ((i & 63) != 61) {
+						if ((i & 0x3f) != 61) {
 							instrumentNo[ch] = i >> 10;
 							instrumentFrame[ch] = frames;
 						}
-						volumeValue[ch] = i >> 6 & 15;
+						volumeValue[ch] = i >> 6 & 0xf;
 						volumeFrame[ch] = frames;
 						break;
 					}
@@ -3744,16 +3744,16 @@ static bool ASAPInfo_ParseRmtSong(ASAPInfo *self, uint8_t const *module, int mod
 							return false;
 						break;
 					}
-					if ((i & 63) == 62) {
+					if ((i & 0x3f) == 62) {
 						blankRows[ch] = i >> 6;
 						break;
 					}
-					if ((i & 191) == 63) {
+					if ((i & 0xbf) == 63) {
 						if ((tempo = ASAPInfo_SafeGetByte(module, moduleLen, patternOffset[ch]++)) == -1)
 							return false;
 						continue;
 					}
-					if (i == 191) {
+					if (i == 0xbf) {
 						if ((i = ASAPInfo_SafeGetByte(module, moduleLen, patternOffset[ch])) == -1)
 							return false;
 						patternOffset[ch] = patternBegin[ch] + i;
@@ -3789,9 +3789,9 @@ static bool ASAPInfo_ParseRmtSong(ASAPInfo *self, uint8_t const *module, int mod
 
 static bool ASAPInfo_ValidateRmt(uint8_t const *module, int moduleLen)
 {
-	if (moduleLen < 48)
+	if (moduleLen < 0x30)
 		return false;
-	if (module[6] != 'R' || module[7] != 'M' || module[8] != 'T' || module[13] != 1)
+	if (module[6] != 'R' || module[7] != 'M' || module[8] != 'T' || module[0xd] != 1)
 		return false;
 	return true;
 }
@@ -3812,18 +3812,18 @@ static bool ASAPInfo_ParseRmt(ASAPInfo *self, uint8_t const *module, int moduleL
 	default:
 		return false;
 	}
-	int perFrame = module[12];
+	int perFrame = module[0xc];
 	if (perFrame < 1 || perFrame > 4)
 		return false;
 	self->originalType = self->type = ASAPModuleType_RMT;
 	if (!ASAPInfo_ParseModule(self, module, moduleLen))
 		return false;
 	int blockLen = ASAPInfo_GetWord(module, 4) + 1 - self->music;
-	int songLen = ASAPInfo_GetWord(module, 4) + 1 - ASAPInfo_GetWord(module, 20);
-	if (posShift == 3 && (songLen & 4) != 0 && module[6 + blockLen - 4] == 254)
+	int songLen = ASAPInfo_GetWord(module, 4) + 1 - ASAPInfo_GetWord(module, 0x14);
+	if (posShift == 3 && (songLen & 4) != 0 && module[6 + blockLen - 4] == 0xfe)
 		songLen += 4;
 	songLen >>= posShift;
-	if (songLen >= 256)
+	if (songLen >= 0x100)
 		return false;
 	bool globalSeen[256] = { false };
 	self->songs = 0;
@@ -3835,7 +3835,7 @@ static bool ASAPInfo_ParseRmt(ASAPInfo *self, uint8_t const *module, int moduleL
 		}
 	}
 	self->fastplay = 312 / perFrame;
-	self->player = 1536;
+	self->player = 0x600;
 	if (self->songs == 0)
 		return false;
 	uint8_t title[127];
@@ -3853,14 +3853,14 @@ static bool ASAPInfo_ParseRmt(ASAPInfo *self, uint8_t const *module, int moduleL
 static bool ASAPInfo_ParseTmcSong(ASAPInfo *self, uint8_t const *module, int moduleLen, int pos)
 {
 	int addrToOffset = ASAPInfo_GetWord(module, 2) - 6;
-	int tempo = module[36] + 1;
+	int tempo = module[0x24] + 1;
 	int frames = 0;
 	int patternOffset[8];
 	int blankRows[8];
-	while (module[437 + pos] < 128) {
+	while (module[437 + pos] < 0x80) {
 		for (int ch = 7; ch >= 0; ch--) {
 			int pat = module[437 + pos - 2 * ch];
-			patternOffset[ch] = module[166 + pat] + (module[294 + pat] << 8) - addrToOffset;
+			patternOffset[ch] = module[0xa6 + pat] + (module[0x126 + pat] << 8) - addrToOffset;
 			blankRows[ch] = 0;
 		}
 		for (int patternRows = 64; --patternRows >= 0;) {
@@ -3871,25 +3871,25 @@ static bool ASAPInfo_ParseTmcSong(ASAPInfo *self, uint8_t const *module, int mod
 					int i = ASAPInfo_SafeGetByte(module, moduleLen, patternOffset[ch]++);
 					if (i == -1)
 						return false;
-					if (i < 64) {
+					if (i < 0x40) {
 						patternOffset[ch]++;
 						break;
 					}
-					if (i == 64) {
+					if (i == 0x40) {
 						if ((i = ASAPInfo_SafeGetByte(module, moduleLen, patternOffset[ch]++)) == -1)
 							return false;
-						if ((i & 127) == 0)
+						if ((i & 0x7f) == 0)
 							patternRows = 0;
 						else
-							tempo = (i & 127) + 1;
-						if (i >= 128)
+							tempo = (i & 0x7f) + 1;
+						if (i >= 0x80)
 							patternOffset[ch]++;
 						break;
 					}
-					if (i < 128) {
+					if (i < 0x80) {
 						if ((i = ASAPInfo_SafeGetByte(module, moduleLen, patternOffset[ch]++)) == -1)
 							return false;
-						i &= 127;
+						i &= 0x7f;
 						if (i == 0)
 							patternRows = 0;
 						else
@@ -3897,9 +3897,9 @@ static bool ASAPInfo_ParseTmcSong(ASAPInfo *self, uint8_t const *module, int mod
 						patternOffset[ch]++;
 						break;
 					}
-					if (i < 192)
+					if (i < 0xc0)
 						continue;
-					blankRows[ch] = i - 191;
+					blankRows[ch] = i - 0xbf;
 					break;
 				}
 			}
@@ -3907,7 +3907,7 @@ static bool ASAPInfo_ParseTmcSong(ASAPInfo *self, uint8_t const *module, int mod
 		}
 		pos += 16;
 	}
-	if (module[436 + pos] < 128)
+	if (module[436 + pos] < 0x80)
 		self->loops[self->songs] = true;
 	ASAPInfo_AddSong(self, frames);
 	return true;
@@ -3926,7 +3926,7 @@ static int ASAPInfo_ParseTmcTitle(uint8_t *title, int titleLen, uint8_t const *m
 		title[titleLen++] = ' ';
 	}
 	while (moduleOffset <= lastOffset) {
-		int c = module[moduleOffset++] & 127;
+		int c = module[moduleOffset++] & 0x7f;
 		switch (c) {
 		case 20:
 			c = '*';
@@ -3956,35 +3956,35 @@ static int ASAPInfo_ParseTmcTitle(uint8_t *title, int titleLen, uint8_t const *m
 
 static bool ASAPInfo_ParseTmc(ASAPInfo *self, uint8_t const *module, int moduleLen)
 {
-	if (moduleLen < 464)
+	if (moduleLen < 0x1d0)
 		return false;
 	self->originalType = self->type = ASAPModuleType_TMC;
 	if (!ASAPInfo_ParseModule(self, module, moduleLen))
 		return false;
 	self->channels = 2;
 	int i = 0;
-	while (module[102 + i] == 0) {
+	while (module[0x66 + i] == 0) {
 		if (++i >= 64)
 			return false;
 	}
-	int lastPos = (module[102 + i] << 8) + module[38 + i] - ASAPInfo_GetWord(module, 2) - 432;
-	if (437 + lastPos >= moduleLen)
+	int lastPos = (module[0x66 + i] << 8) + module[0x26 + i] - ASAPInfo_GetWord(module, 2) - 0x1b0;
+	if (0x1b5 + lastPos >= moduleLen)
 		return false;
 	do {
 		if (lastPos <= 0)
 			return false;
 		lastPos -= 16;
 	}
-	while (module[437 + lastPos] >= 128);
+	while (module[0x1b5 + lastPos] >= 0x80);
 	self->songs = 0;
 	if (!ASAPInfo_ParseTmcSong(self, module, moduleLen, 0))
 		return false;
 	for (i = 0; i < lastPos && self->songs < 32; i += 16)
-		if (module[437 + i] >= 128) {
+		if (module[0x1b5 + i] >= 0x80) {
 			if (!ASAPInfo_ParseTmcSong(self, module, moduleLen, i + 16))
 				return false;
 		}
-	i = module[37];
+	i = module[0x25];
 	if (i < 1 || i > 4)
 		return false;
 	self->fastplay = 312 / i;
@@ -3997,7 +3997,7 @@ static bool ASAPInfo_ParseTmc(ASAPInfo *self, uint8_t const *module, int moduleL
 static bool ASAPInfo_ParseTm2Song(ASAPInfo *self, uint8_t const *module, int moduleLen, int pos)
 {
 	int addrToOffset = ASAPInfo_GetWord(module, 2) - 6;
-	int tempo = module[36] + 1;
+	int tempo = module[0x24] + 1;
 	int playerCalls = 0;
 	int patternOffset[8];
 	int blankRows[8];
@@ -4005,13 +4005,13 @@ static bool ASAPInfo_ParseTm2Song(ASAPInfo *self, uint8_t const *module, int mod
 		int patternRows = module[918 + pos];
 		if (patternRows == 0)
 			break;
-		if (patternRows >= 128) {
+		if (patternRows >= 0x80) {
 			self->loops[self->songs] = true;
 			break;
 		}
 		for (int ch = 7; ch >= 0; ch--) {
 			int pat = module[917 + pos - 2 * ch];
-			patternOffset[ch] = module[262 + pat] + (module[518 + pat] << 8) - addrToOffset;
+			patternOffset[ch] = module[0x106 + pat] + (module[0x206 + pat] << 8) - addrToOffset;
 			blankRows[ch] = 0;
 		}
 		while (--patternRows >= 0) {
@@ -4026,36 +4026,36 @@ static bool ASAPInfo_ParseTm2Song(ASAPInfo *self, uint8_t const *module, int mod
 						patternOffset[ch]++;
 						break;
 					}
-					if (i < 64) {
-						if (module[patternOffset[ch]++] >= 128)
+					if (i < 0x40) {
+						if (module[patternOffset[ch]++] >= 0x80)
 							patternOffset[ch]++;
 						break;
 					}
-					if (i < 128) {
+					if (i < 0x80) {
 						patternOffset[ch]++;
 						break;
 					}
-					if (i == 128) {
+					if (i == 0x80) {
 						if ((blankRows[ch] = ASAPInfo_SafeGetByte(module, moduleLen, patternOffset[ch]++)) == -1)
 							return false;
 						break;
 					}
-					if (i < 192)
+					if (i < 0xc0)
 						break;
-					if (i < 208) {
-						tempo = i - 191;
+					if (i < 0xd0) {
+						tempo = i - 0xbf;
 						continue;
 					}
-					if (i < 224) {
+					if (i < 0xe0) {
 						patternOffset[ch]++;
 						break;
 					}
-					if (i < 240) {
+					if (i < 0xf0) {
 						patternOffset[ch] += 2;
 						break;
 					}
-					if (i < 255) {
-						blankRows[ch] = i - 240;
+					if (i < 0xff) {
+						blankRows[ch] = i - 0xf0;
 						break;
 					}
 					blankRows[ch] = 64;
@@ -4072,31 +4072,31 @@ static bool ASAPInfo_ParseTm2Song(ASAPInfo *self, uint8_t const *module, int mod
 
 static bool ASAPInfo_ParseTm2(ASAPInfo *self, uint8_t const *module, int moduleLen)
 {
-	if (moduleLen < 932)
+	if (moduleLen < 0x3a4)
 		return false;
 	self->originalType = self->type = ASAPModuleType_TM2;
 	if (!ASAPInfo_ParseModule(self, module, moduleLen))
 		return false;
-	int i = module[37];
+	int i = module[0x25];
 	if (i < 1 || i > 4)
 		return false;
 	self->fastplay = 312 / i;
-	self->player = 2048;
-	if (module[31] != 0)
+	self->player = 0x800;
+	if (module[0x1f] != 0)
 		self->channels = 2;
-	int lastPos = 65535;
-	for (i = 0; i < 128; i++) {
-		int instrAddr = module[134 + i] + (module[774 + i] << 8);
+	int lastPos = 0xffff;
+	for (i = 0; i < 0x80; i++) {
+		int instrAddr = module[0x86 + i] + (module[0x306 + i] << 8);
 		if (instrAddr != 0 && instrAddr < lastPos)
 			lastPos = instrAddr;
 	}
-	for (i = 0; i < 256; i++) {
-		int patternAddr = module[262 + i] + (module[518 + i] << 8);
+	for (i = 0; i < 0x100; i++) {
+		int patternAddr = module[0x106 + i] + (module[0x206 + i] << 8);
 		if (patternAddr != 0 && patternAddr < lastPos)
 			lastPos = patternAddr;
 	}
-	lastPos -= ASAPInfo_GetWord(module, 2) + 896;
-	if (902 + lastPos >= moduleLen)
+	lastPos -= ASAPInfo_GetWord(module, 2) + 0x380;
+	if (0x386 + lastPos >= moduleLen)
 		return false;
 	int c;
 	do {
@@ -4105,21 +4105,21 @@ static bool ASAPInfo_ParseTm2(ASAPInfo *self, uint8_t const *module, int moduleL
 		lastPos -= 17;
 		c = module[918 + lastPos];
 	}
-	while (c == 0 || c >= 128);
+	while (c == 0 || c >= 0x80);
 	self->songs = 0;
 	if (!ASAPInfo_ParseTm2Song(self, module, moduleLen, 0))
 		return false;
 	for (i = 0; i < lastPos && self->songs < 32; i += 17) {
 		c = module[918 + i];
-		if (c == 0 || c >= 128) {
+		if (c == 0 || c >= 0x80) {
 			if (!ASAPInfo_ParseTm2Song(self, module, moduleLen, i + 17))
 				return false;
 		}
 	}
 	uint8_t title[127];
-	int titleLen = ASAPInfo_ParseTmcTitle(title, 0, module, 39);
-	titleLen = ASAPInfo_ParseTmcTitle(title, titleLen, module, 71);
-	titleLen = ASAPInfo_ParseTmcTitle(title, titleLen, module, 103);
+	int titleLen = ASAPInfo_ParseTmcTitle(title, 0, module, 0x27);
+	titleLen = ASAPInfo_ParseTmcTitle(title, titleLen, module, 0x47);
+	titleLen = ASAPInfo_ParseTmcTitle(title, titleLen, module, 0x67);
 	FuString_Assign(&self->title, FuString_Substring((const char *) title, titleLen));
 	return true;
 }
@@ -4127,7 +4127,7 @@ static bool ASAPInfo_ParseTm2(ASAPInfo *self, uint8_t const *module, int moduleL
 static int ASAPInfo_AfterFF(uint8_t const *module, int moduleLen, int currentOffset)
 {
 	while (currentOffset < moduleLen) {
-		if (module[currentOffset++] == 255)
+		if (module[currentOffset++] == 0xff)
 			return currentOffset;
 	}
 	return -1;
@@ -4142,12 +4142,12 @@ static bool ASAPInfo_IsFcSongEnd(uint8_t const *module, int const *trackPos)
 {
 	bool allLoop = true;
 	for (int n = 0; n < 3; n++) {
-		if (trackPos[n] >= 256)
+		if (trackPos[n] >= 0x100)
 			return true;
 		switch (ASAPInfo_GetFcTrackCommand(module, trackPos, n)) {
-		case 254:
+		case 0xfe:
 			return true;
-		case 255:
+		case 0xff:
 			break;
 		default:
 			allLoop = false;
@@ -4159,9 +4159,9 @@ static bool ASAPInfo_IsFcSongEnd(uint8_t const *module, int const *trackPos)
 
 static bool ASAPInfo_ValidateFc(uint8_t const *module, int moduleLen)
 {
-	if (moduleLen < 899)
+	if (moduleLen < 0x383)
 		return false;
-	if (module[0] != 38 || module[1] != 35)
+	if (module[0] != 0x26 || module[1] != 0x23)
 		return false;
 	return true;
 }
@@ -4171,22 +4171,22 @@ static bool ASAPInfo_ParseFc(ASAPInfo *self, uint8_t const *module, int moduleLe
 	if (!ASAPInfo_ValidateFc(module, moduleLen))
 		return false;
 	self->originalType = self->type = ASAPModuleType_FC;
-	self->player = 1024;
-	self->music = 2560;
+	self->player = 0x400;
+	self->music = 0xa00;
 	self->songs = 0;
 	self->headerLen = -1;
 	int patternOffsets[64];
-	int currentOffset = 899;
-	for (int i = 0; i < 64; i++) {
+	int currentOffset = 0x383;
+	for (int i = 0; i < 0x40; i++) {
 		patternOffsets[i] = currentOffset;
 		if ((currentOffset = ASAPInfo_AfterFF(module, moduleLen, currentOffset)) == -1)
 			return false;
 	}
-	for (int i = 0; i < 32; i++) {
+	for (int i = 0; i < 0x20; i++) {
 		if ((currentOffset = ASAPInfo_AfterFF(module, moduleLen, currentOffset)) == -1)
 			return false;
 	}
-	for (int pos = 0; pos < 256 && self->songs < 32;) {
+	for (int pos = 0; pos < 0x100 && self->songs < 32;) {
 		int trackPos[3];
 		for (int n = 0; n < 3; n++)
 			trackPos[n] = pos;
@@ -4197,34 +4197,34 @@ static bool ASAPInfo_ParseFc(ASAPInfo *self, uint8_t const *module, int moduleLe
 		self->loops[self->songs] = true;
 		while (!ASAPInfo_IsFcSongEnd(module, trackPos)) {
 			for (int n = 0; n < 3; n++) {
-				if (ASAPInfo_GetFcTrackCommand(module, trackPos, n) == 255)
+				if (ASAPInfo_GetFcTrackCommand(module, trackPos, n) == 0xff)
 					continue;
 				if (patternDelay[n]-- > 0)
 					continue;
-				while (trackPos[n] < 256) {
+				while (trackPos[n] < 0x100) {
 					int trackCmd = ASAPInfo_GetFcTrackCommand(module, trackPos, n);
-					if (trackCmd < 64) {
+					if (trackCmd < 0x40) {
 						int patternCmd = module[patternOffsets[trackCmd] + patternPos[n]++];
-						if (patternCmd < 64) {
+						if (patternCmd < 0x40) {
 							patternDelay[n] = noteDuration[n];
 							break;
 						}
-						else if (patternCmd < 96)
-							noteDuration[n] = patternCmd - 64;
-						else if (patternCmd == 255) {
+						else if (patternCmd < 0x60)
+							noteDuration[n] = patternCmd - 0x40;
+						else if (patternCmd == 0xff) {
 							patternDelay[n] = 0;
 							noteDuration[n] = 0;
 							patternPos[n] = 0;
 							trackPos[n]++;
 						}
 					}
-					else if (trackCmd == 64)
+					else if (trackCmd == 0x40)
 						trackPos[n] += 2;
-					else if (trackCmd == 254) {
+					else if (trackCmd == 0xfe) {
 						self->loops[self->songs] = false;
 						break;
 					}
-					else if (trackCmd == 255)
+					else if (trackCmd == 0xff)
 						break;
 					else
 						trackPos[n]++;
@@ -4243,7 +4243,7 @@ static bool ASAPInfo_ParseFc(ASAPInfo *self, uint8_t const *module, int moduleLe
 				pos = nxtrkpos;
 		}
 		pos++;
-		if (pos <= 256)
+		if (pos <= 0x100)
 			ASAPInfo_AddSong(self, playerCalls);
 	}
 	return true;
@@ -4274,9 +4274,9 @@ static bool ASAPInfo_ParseMptSamples(ASAPInfo *self, uint8_t const *content, int
 		int samples = (end - start) << 9;
 		ASAPInfo_AddSong(self, samples + samples / 301 * 11);
 	}
-	if (contentLen < ((end - content[0]) << 8) + 32)
+	if (contentLen < ((end - content[0]) << 8) + 0x20)
 		return false;
-	self->music = (content[0] << 8) - 32;
+	self->music = (content[0] << 8) - 0x20;
 	return true;
 }
 
@@ -4323,7 +4323,7 @@ static int ASAPInfo_ParseHex(uint8_t const *module, int i, int argEnd)
 	int r = 0;
 	while (i < argEnd) {
 		int c = module[i++];
-		if (r > 4095)
+		if (r > 0xfff)
 			return -1;
 		r <<= 4;
 		if (c >= '0' && c <= '9')
@@ -4356,7 +4356,7 @@ static int ASAPInfo_GetFirstBlockLen(const ASAPInfo *self, uint8_t const *module
 
 static int ASAPInfo_GetRmtSapOffset(const ASAPInfo *self, uint8_t const *module, int moduleLen)
 {
-	if (self->player != 13315)
+	if (self->player != 0x3403)
 		return -1;
 	int offset = self->headerLen + ASAPInfo_GetFirstBlockLen(self, module);
 	if (offset + 6 >= moduleLen || module[offset + 4] != 'R' || module[offset + 5] != 'M' || module[offset + 6] != 'T')
@@ -4372,7 +4372,7 @@ static bool ASAPInfo_ParseSap(ASAPInfo *self, uint8_t const *module, int moduleL
 	int type = 0;
 	int moduleIndex = 5;
 	int durationIndex = 0;
-	while (module[moduleIndex] != 255) {
+	while (module[moduleIndex] != 0xff) {
 		int lineStart = moduleIndex;
 		while (module[moduleIndex] > ' ') {
 			if (++moduleIndex >= moduleLen)
@@ -4457,7 +4457,7 @@ static bool ASAPInfo_ParseSap(ASAPInfo *self, uint8_t const *module, int moduleL
 		else if (tagLen == 5 && memcmp(module + lineStart, "COVOX", 5) == 0) {
 			if ((self->covoxAddr = ASAPInfo_ParseHex(module, argStart, argEnd)) == -1)
 				return false;
-			if (self->covoxAddr != 54784)
+			if (self->covoxAddr != 0xd600)
 				return false;
 			self->channels = 2;
 		}
@@ -4476,17 +4476,17 @@ static bool ASAPInfo_ParseSap(ASAPInfo *self, uint8_t const *module, int moduleL
 		if (self->init < 0)
 			return false;
 		self->originalType = self->type = ASAPModuleType_SAP_B;
-		if ((self->init == 1019 || self->init == 1017) && self->player == 1283)
+		if ((self->init == 0x3fb || self->init == 0x3f9) && self->player == 0x503)
 			self->originalType = ASAPModuleType_DLT;
-		else if (((self->init == 1267 || self->init == 1263) && self->player == 1283) || (self->init == 62707 && self->player == 62723))
+		else if (((self->init == 0x4f3 || self->init == 0x4ef) && self->player == 0x503) || (self->init == 0xf4f3 && self->player == 0xf503))
 			self->originalType = ASAPModuleType_MPT;
-		else if (self->init == 3200 || ASAPInfo_GetRmtSapOffset(self, module, moduleLen) > 0)
+		else if (self->init == 0xc80 || ASAPInfo_GetRmtSapOffset(self, module, moduleLen) > 0)
 			self->originalType = ASAPModuleType_RMT;
-		else if (self->init == 1269 || self->init == 62709 || self->init == 1266 || ((self->init == 1255 || self->init == 62695 || self->init == 1252) && self->fastplay == 156) || ((self->init == 1253 || self->init == 62693 || self->init == 1250) && (self->fastplay == 104 || self->fastplay == 78)))
+		else if (self->init == 0x4f5 || self->init == 0xf4f5 || self->init == 0x4f2 || ((self->init == 0x4e7 || self->init == 0xf4e7 || self->init == 0x4e4) && self->fastplay == 156) || ((self->init == 0x4e5 || self->init == 0xf4e5 || self->init == 0x4e2) && (self->fastplay == 104 || self->fastplay == 78)))
 			self->originalType = ASAPModuleType_TMC;
-		else if ((self->init == 4224 && self->player == 1283) || (self->init == 4992 && self->player == 2051))
+		else if ((self->init == 0x1080 && self->player == 0x503) || (self->init == 0x1380 && self->player == 0x803))
 			self->originalType = ASAPModuleType_TM2;
-		else if (self->init == 1024 && self->player == 1027)
+		else if (self->init == 0x400 && self->player == 0x403)
 			self->originalType = ASAPModuleType_FC;
 		break;
 	case 'C':
@@ -4495,12 +4495,12 @@ static bool ASAPInfo_ParseSap(ASAPInfo *self, uint8_t const *module, int moduleL
 		if (self->music < 0)
 			return false;
 		self->originalType = self->type = ASAPModuleType_SAP_C;
-		if ((self->player == 1280 || self->player == 62720) && moduleLen >= 1024) {
+		if ((self->player == 0x500 || self->player == 0xf500) && moduleLen >= 1024) {
 			if (self->channels > 1)
 				self->originalType = ASAPModuleType_CMS;
-			else if (module[moduleLen - 170] == 30)
+			else if (module[moduleLen - 170] == 0x1e)
 				self->originalType = ASAPModuleType_CMR;
-			else if (module[moduleLen - 909] == 48)
+			else if (module[moduleLen - 909] == 0x30)
 				self->originalType = ASAPModuleType_CM3;
 			else
 				self->originalType = ASAPModuleType_CMC;
@@ -4510,8 +4510,8 @@ static bool ASAPInfo_ParseSap(ASAPInfo *self, uint8_t const *module, int moduleL
 		if (self->init < 0)
 			return false;
 		self->originalType = self->type = ASAPModuleType_SAP_D;
-		if (self->player == 1283 || self->player == 62723) {
-			if (self->init == self->player - 32 && moduleLen > 2231 && module[moduleLen - 2231] == 162)
+		if (self->player == 0x503 || self->player == 0xf503) {
+			if (self->init == self->player - 32 && moduleLen > 2231 && module[moduleLen - 2231] == 0xa2)
 				self->originalType = ASAPModuleType_MD1;
 			else if (self->init == self->player - 30)
 				self->originalType = ASAPModuleType_MD2;
@@ -4529,14 +4529,14 @@ static bool ASAPInfo_ParseSap(ASAPInfo *self, uint8_t const *module, int moduleL
 	}
 	if (self->fastplay < 0)
 		self->fastplay = self->ntsc ? 262 : 312;
-	if (module[moduleIndex + 1] != 255)
+	if (module[moduleIndex + 1] != 0xff)
 		return false;
 	return true;
 }
 
 static int ASAPInfo_PackExt(const char *ext)
 {
-	return (ptrdiff_t) strlen(ext) == 2 && ext[0] <= 'z' && ext[1] <= 'z' ? ext[0] | ext[1] << 8 | 2105376 : (ptrdiff_t) strlen(ext) == 3 && ext[0] <= 'z' && ext[1] <= 'z' && ext[2] <= 'z' ? ext[0] | ext[1] << 8 | ext[2] << 16 | 2105376 : 0;
+	return (ptrdiff_t) strlen(ext) == 2 && ext[0] <= 'z' && ext[1] <= 'z' ? ext[0] | ext[1] << 8 | 0x202020 : (ptrdiff_t) strlen(ext) == 3 && ext[0] <= 'z' && ext[1] <= 'z' && ext[2] <= 'z' ? ext[0] | ext[1] << 8 | ext[2] << 16 | 0x202020 : 0;
 }
 
 static int ASAPInfo_GetPackedExt(const char *filename)
@@ -4547,7 +4547,7 @@ static int ASAPInfo_GetPackedExt(const char *filename)
 		if (c <= ' ' || c > 'z')
 			return 0;
 		if (c == '.')
-			return ext | 2105376;
+			return ext | 0x202020;
 		ext = (ext << 8) + c;
 	}
 	return 0;
@@ -4901,7 +4901,7 @@ int ASAPInfo_GetMusicAddress(const ASAPInfo *self)
 
 bool ASAPInfo_SetMusicAddress(ASAPInfo *self, int address)
 {
-	if (address < 0 || address >= 65535)
+	if (address < 0 || address >= 0xffff)
 		return false;
 	self->music = address;
 	return true;
@@ -5127,7 +5127,7 @@ static bool ASAPWriter_WriteByte(ASAPWriter *self, int value)
 
 static bool ASAPWriter_WriteWord(ASAPWriter *self, int value)
 {
-	if (!ASAPWriter_WriteByte(self, value & 255))
+	if (!ASAPWriter_WriteByte(self, value & 0xff))
 		return false;
 	return ASAPWriter_WriteByte(self, value >> 8);
 }
@@ -5196,7 +5196,7 @@ static bool ASAPWriter_WriteHexSapTag(ASAPWriter *self, const char *tag, int val
 	if (!ASAPWriter_WriteString(self, tag))
 		return false;
 	for (int i = 12; i >= 0; i -= 4) {
-		int digit = value >> i & 15;
+		int digit = value >> i & 0xf;
 		if (!ASAPWriter_WriteByte(self, digit + (digit < 10 ? '0' : 55)))
 			return false;
 	}
@@ -5275,46 +5275,46 @@ static bool ASAPWriter_WriteSapHeader(ASAPWriter *self, const ASAPInfo *info, in
 
 static bool ASAPWriter_WritePlaTaxLda0(ASAPWriter *self)
 {
-	if (!ASAPWriter_WriteByte(self, 104))
+	if (!ASAPWriter_WriteByte(self, 0x68))
 		return false;
-	if (!ASAPWriter_WriteByte(self, 170))
+	if (!ASAPWriter_WriteByte(self, 0xaa))
 		return false;
-	if (!ASAPWriter_WriteByte(self, 169))
+	if (!ASAPWriter_WriteByte(self, 0xa9))
 		return false;
 	return ASAPWriter_WriteByte(self, 0);
 }
 
 static bool ASAPWriter_WriteCmcInit(ASAPWriter *self, const ASAPInfo *info)
 {
-	if (!ASAPWriter_WriteWord(self, 4064))
+	if (!ASAPWriter_WriteWord(self, 0xfe0))
 		return false;
 	if (!ASAPWriter_WriteWord(self, 4080))
 		return false;
-	if (!ASAPWriter_WriteByte(self, 72))
+	if (!ASAPWriter_WriteByte(self, 0x48))
 		return false;
-	if (!ASAPWriter_WriteByte(self, 162))
+	if (!ASAPWriter_WriteByte(self, 0xa2))
 		return false;
-	if (!ASAPWriter_WriteByte(self, info->music & 255))
+	if (!ASAPWriter_WriteByte(self, info->music & 0xff))
 		return false;
-	if (!ASAPWriter_WriteByte(self, 160))
+	if (!ASAPWriter_WriteByte(self, 0xa0))
 		return false;
 	if (!ASAPWriter_WriteByte(self, info->music >> 8))
 		return false;
-	if (!ASAPWriter_WriteByte(self, 169))
+	if (!ASAPWriter_WriteByte(self, 0xa9))
 		return false;
-	if (!ASAPWriter_WriteByte(self, 112))
+	if (!ASAPWriter_WriteByte(self, 0x70))
 		return false;
-	if (!ASAPWriter_WriteByte(self, 32))
+	if (!ASAPWriter_WriteByte(self, 0x20))
 		return false;
 	if (!ASAPWriter_WriteWord(self, self->player + 3))
 		return false;
 	if (!ASAPWriter_WritePlaTaxLda0(self))
 		return false;
-	if (!ASAPWriter_WriteByte(self, 76))
+	if (!ASAPWriter_WriteByte(self, 0x4c))
 		return false;
 	if (!ASAPWriter_WriteWord(self, self->player + 3))
 		return false;
-	self->init = 4064;
+	self->init = 0xfe0;
 	self->player += 6;
 	return true;
 }
@@ -5393,22 +5393,22 @@ static bool ASAPWriter_WriteMptInit(ASAPWriter *self, const ASAPInfo *info, int 
 	if (ASAPInfo_GetSongs(info) != 1) {
 		if (!ASAPWriter_WriteBytes(self, info->songPos, 0, ASAPInfo_GetSongs(info)))
 			return false;
-		if (!ASAPWriter_WriteByte(self, 72))
+		if (!ASAPWriter_WriteByte(self, 0x48))
 			return false;
 	}
-	if (!ASAPWriter_WriteByte(self, 160))
+	if (!ASAPWriter_WriteByte(self, 0xa0))
 		return false;
-	if (!ASAPWriter_WriteByte(self, info->music & 255))
+	if (!ASAPWriter_WriteByte(self, info->music & 0xff))
 		return false;
-	if (!ASAPWriter_WriteByte(self, 162))
+	if (!ASAPWriter_WriteByte(self, 0xa2))
 		return false;
 	if (!ASAPWriter_WriteByte(self, info->music >> 8))
 		return false;
-	if (!ASAPWriter_WriteByte(self, 169))
+	if (!ASAPWriter_WriteByte(self, 0xa9))
 		return false;
 	if (!ASAPWriter_WriteByte(self, 0))
 		return false;
-	if (!ASAPWriter_WriteByte(self, 32))
+	if (!ASAPWriter_WriteByte(self, 0x20))
 		return false;
 	return ASAPWriter_WriteWord(self, player);
 }
@@ -5416,22 +5416,22 @@ static bool ASAPWriter_WriteMptInit(ASAPWriter *self, const ASAPInfo *info, int 
 static bool ASAPWriter_WriteMptPlaySong(ASAPWriter *self, const ASAPInfo *info, int startAddr)
 {
 	if (ASAPInfo_GetSongs(info) != 1) {
-		if (!ASAPWriter_WriteByte(self, 104))
+		if (!ASAPWriter_WriteByte(self, 0x68))
 			return false;
-		if (!ASAPWriter_WriteByte(self, 168))
+		if (!ASAPWriter_WriteByte(self, 0xa8))
 			return false;
-		if (!ASAPWriter_WriteByte(self, 190))
+		if (!ASAPWriter_WriteByte(self, 0xbe))
 			return false;
 		if (!ASAPWriter_WriteWord(self, startAddr))
 			return false;
 	}
 	else {
-		if (!ASAPWriter_WriteByte(self, 162))
+		if (!ASAPWriter_WriteByte(self, 0xa2))
 			return false;
 		if (!ASAPWriter_WriteByte(self, 0))
 			return false;
 	}
-	if (!ASAPWriter_WriteByte(self, 169))
+	if (!ASAPWriter_WriteByte(self, 0xa9))
 		return false;
 	return ASAPWriter_WriteByte(self, 2);
 }
@@ -5491,12 +5491,12 @@ static bool ASAPWriter_WriteExecutable(ASAPWriter *self, bool toSap, const ASAPI
 		}
 		break;
 	case ASAPModuleType_DLT:
-		if ((startAddr = ASAPWriter_WriteExecutableHeaderForSongPos(self, toSap, info, 'B', player, 5, 7, 259)) == -1)
+		if ((startAddr = ASAPWriter_WriteExecutableHeaderForSongPos(self, toSap, info, 'B', player, 5, 7, 0x103)) == -1)
 			return false;
-		if (moduleLen == 11270) {
+		if (moduleLen == 0x2c06) {
 			if (!ASAPWriter_WriteBytes(self, module, 0, 4))
 				return false;
-			if (!ASAPWriter_WriteWord(self, 19456))
+			if (!ASAPWriter_WriteWord(self, 0x4c00))
 				return false;
 			if (!ASAPWriter_WriteBytes(self, module, 6, moduleLen))
 				return false;
@@ -5514,22 +5514,22 @@ static bool ASAPWriter_WriteExecutable(ASAPWriter *self, bool toSap, const ASAPI
 		if (ASAPInfo_GetSongs(info) != 1) {
 			if (!ASAPWriter_WriteBytes(self, info->songPos, 0, ASAPInfo_GetSongs(info)))
 				return false;
-			if (!ASAPWriter_WriteByte(self, 170))
+			if (!ASAPWriter_WriteByte(self, 0xaa))
 				return false;
-			if (!ASAPWriter_WriteByte(self, 188))
+			if (!ASAPWriter_WriteByte(self, 0xbc))
 				return false;
 			if (!ASAPWriter_WriteWord(self, startAddr))
 				return false;
 		}
 		else {
-			if (!ASAPWriter_WriteByte(self, 160))
+			if (!ASAPWriter_WriteByte(self, 0xa0))
 				return false;
 			if (!ASAPWriter_WriteByte(self, 0))
 				return false;
 		}
-		if (!ASAPWriter_WriteByte(self, 76))
+		if (!ASAPWriter_WriteByte(self, 0x4c))
 			return false;
-		if (!ASAPWriter_WriteWord(self, player + 256))
+		if (!ASAPWriter_WriteWord(self, player + 0x100))
 			return false;
 		if (!ASAPWriter_WriteBytes(self, playerRoutine, 6, playerLastByte - player + 7))
 			return false;
@@ -5564,11 +5564,11 @@ static bool ASAPWriter_WriteExecutable(ASAPWriter *self, bool toSap, const ASAPI
 			return false;
 		if (ASAPWriter_WriteNative(self, info, module, moduleLen, false) == NULL)
 			return false;
-		if (!ASAPWriter_WriteByte(self, 224))
+		if (!ASAPWriter_WriteByte(self, 0xe0))
 			return false;
 		if (!ASAPWriter_WriteByte(self, samplesPage))
 			return false;
-		if (!ASAPWriter_WriteByte(self, 255))
+		if (!ASAPWriter_WriteByte(self, 0xff))
 			return false;
 		if (!ASAPWriter_WriteByte(self, samplesPage + (samples.contentLength >> 8)))
 			return false;
@@ -5580,40 +5580,40 @@ static bool ASAPWriter_WriteExecutable(ASAPWriter *self, bool toSap, const ASAPI
 			return false;
 		if (!ASAPWriter_WriteMptInit(self, info, player))
 			return false;
-		if (!ASAPWriter_WriteByte(self, 160))
+		if (!ASAPWriter_WriteByte(self, 0xa0))
 			return false;
-		if (!ASAPWriter_WriteByte(self, 224))
+		if (!ASAPWriter_WriteByte(self, 0xe0))
 			return false;
-		if (!ASAPWriter_WriteByte(self, 162))
+		if (!ASAPWriter_WriteByte(self, 0xa2))
 			return false;
 		if (!ASAPWriter_WriteByte(self, samplesPage))
 			return false;
-		if (!ASAPWriter_WriteByte(self, 169))
+		if (!ASAPWriter_WriteByte(self, 0xa9))
 			return false;
 		if (!ASAPWriter_WriteByte(self, 3))
 			return false;
-		if (!ASAPWriter_WriteByte(self, 32))
+		if (!ASAPWriter_WriteByte(self, 0x20))
 			return false;
 		if (!ASAPWriter_WriteWord(self, player))
 			return false;
 		if (!ASAPWriter_WriteMptPlaySong(self, info, startAddr))
 			return false;
-		if (!ASAPWriter_WriteByte(self, 32))
+		if (!ASAPWriter_WriteByte(self, 0x20))
 			return false;
 		if (!ASAPWriter_WriteWord(self, player))
 			return false;
 		if (info->type == ASAPModuleType_MD1) {
-			if (!ASAPWriter_WriteByte(self, 162))
+			if (!ASAPWriter_WriteByte(self, 0xa2))
 				return false;
 			if (!ASAPWriter_WriteByte(self, samples.is15kHz ? 1 : 0))
 				return false;
-			if (!ASAPWriter_WriteByte(self, 169))
+			if (!ASAPWriter_WriteByte(self, 0xa9))
 				return false;
 			if (!ASAPWriter_WriteByte(self, 5))
 				return false;
 		}
 		else {
-			if (!ASAPWriter_WriteByte(self, 169))
+			if (!ASAPWriter_WriteByte(self, 0xa9))
 				return false;
 			if (!ASAPWriter_WriteByte(self, 6))
 				return false;
@@ -5622,22 +5622,22 @@ static bool ASAPWriter_WriteExecutable(ASAPWriter *self, bool toSap, const ASAPI
 			return false;
 		break;
 	case ASAPModuleType_RMT:
-		self->init = 3200;
-		self->player = 1539;
+		self->init = 0xc80;
+		self->player = 0x603;
 		if (toSap) {
 			if (!ASAPWriter_WriteSapHeader(self, info, 'B'))
 				return false;
 		}
 		if (ASAPWriter_WriteNative(self, info, module, moduleLen, false) == NULL)
 			return false;
-		if (!ASAPWriter_WriteWord(self, 3200))
+		if (!ASAPWriter_WriteWord(self, 0xc80))
 			return false;
 		if (ASAPInfo_GetSongs(info) != 1) {
 			if (!ASAPWriter_WriteWord(self, 3210 + ASAPInfo_GetSongs(info)))
 				return false;
-			if (!ASAPWriter_WriteByte(self, 168))
+			if (!ASAPWriter_WriteByte(self, 0xa8))
 				return false;
-			if (!ASAPWriter_WriteByte(self, 185))
+			if (!ASAPWriter_WriteByte(self, 0xb9))
 				return false;
 			if (!ASAPWriter_WriteWord(self, 3211))
 				return false;
@@ -5645,22 +5645,22 @@ static bool ASAPWriter_WriteExecutable(ASAPWriter *self, bool toSap, const ASAPI
 		else {
 			if (!ASAPWriter_WriteWord(self, 3208))
 				return false;
-			if (!ASAPWriter_WriteByte(self, 169))
+			if (!ASAPWriter_WriteByte(self, 0xa9))
 				return false;
 			if (!ASAPWriter_WriteByte(self, 0))
 				return false;
 		}
-		if (!ASAPWriter_WriteByte(self, 162))
+		if (!ASAPWriter_WriteByte(self, 0xa2))
 			return false;
-		if (!ASAPWriter_WriteByte(self, music & 255))
+		if (!ASAPWriter_WriteByte(self, music & 0xff))
 			return false;
-		if (!ASAPWriter_WriteByte(self, 160))
+		if (!ASAPWriter_WriteByte(self, 0xa0))
 			return false;
 		if (!ASAPWriter_WriteByte(self, music >> 8))
 			return false;
-		if (!ASAPWriter_WriteByte(self, 76))
+		if (!ASAPWriter_WriteByte(self, 0x4c))
 			return false;
-		if (!ASAPWriter_WriteWord(self, 1536))
+		if (!ASAPWriter_WriteWord(self, 0x600))
 			return false;
 		if (ASAPInfo_GetSongs(info) != 1) {
 			if (!ASAPWriter_WriteBytes(self, info->songPos, 0, ASAPInfo_GetSongs(info)))
@@ -5671,7 +5671,7 @@ static bool ASAPWriter_WriteExecutable(ASAPWriter *self, bool toSap, const ASAPI
 		break;
 	case ASAPModuleType_TMC:
 		;
-		int perFrame = module[37];
+		int perFrame = module[0x25];
 		static const int TMC_PLAYER_OFFSET[4] = { 3, -9, -10, -10 };
 		self->player = player + TMC_PLAYER_OFFSET[perFrame - 1];
 		static const int TMC_INIT_OFFSET[4] = { -14, -16, -17, -17 };
@@ -5689,22 +5689,22 @@ static bool ASAPWriter_WriteExecutable(ASAPWriter *self, bool toSap, const ASAPI
 		if (!ASAPWriter_WriteWord(self, playerLastByte))
 			return false;
 		if (ASAPInfo_GetSongs(info) != 1) {
-			if (!ASAPWriter_WriteByte(self, 72))
+			if (!ASAPWriter_WriteByte(self, 0x48))
 				return false;
 		}
-		if (!ASAPWriter_WriteByte(self, 160))
+		if (!ASAPWriter_WriteByte(self, 0xa0))
 			return false;
-		if (!ASAPWriter_WriteByte(self, music & 255))
+		if (!ASAPWriter_WriteByte(self, music & 0xff))
 			return false;
-		if (!ASAPWriter_WriteByte(self, 162))
+		if (!ASAPWriter_WriteByte(self, 0xa2))
 			return false;
 		if (!ASAPWriter_WriteByte(self, music >> 8))
 			return false;
-		if (!ASAPWriter_WriteByte(self, 169))
+		if (!ASAPWriter_WriteByte(self, 0xa9))
 			return false;
-		if (!ASAPWriter_WriteByte(self, 112))
+		if (!ASAPWriter_WriteByte(self, 0x70))
 			return false;
-		if (!ASAPWriter_WriteByte(self, 32))
+		if (!ASAPWriter_WriteByte(self, 0x20))
 			return false;
 		if (!ASAPWriter_WriteWord(self, player))
 			return false;
@@ -5713,71 +5713,71 @@ static bool ASAPWriter_WriteExecutable(ASAPWriter *self, bool toSap, const ASAPI
 				return false;
 		}
 		else {
-			if (!ASAPWriter_WriteByte(self, 169))
+			if (!ASAPWriter_WriteByte(self, 0xa9))
 				return false;
-			if (!ASAPWriter_WriteByte(self, 96))
+			if (!ASAPWriter_WriteByte(self, 0x60))
 				return false;
 		}
 		switch (perFrame) {
 		case 2:
-			if (!ASAPWriter_WriteByte(self, 6))
+			if (!ASAPWriter_WriteByte(self, 0x6))
 				return false;
 			if (!ASAPWriter_WriteByte(self, 0))
 				return false;
-			if (!ASAPWriter_WriteByte(self, 76))
+			if (!ASAPWriter_WriteByte(self, 0x4c))
 				return false;
 			if (!ASAPWriter_WriteWord(self, player))
 				return false;
-			if (!ASAPWriter_WriteByte(self, 165))
+			if (!ASAPWriter_WriteByte(self, 0xa5))
 				return false;
 			if (!ASAPWriter_WriteByte(self, 0))
 				return false;
-			if (!ASAPWriter_WriteByte(self, 230))
+			if (!ASAPWriter_WriteByte(self, 0xe6))
 				return false;
 			if (!ASAPWriter_WriteByte(self, 0))
 				return false;
-			if (!ASAPWriter_WriteByte(self, 74))
+			if (!ASAPWriter_WriteByte(self, 0x4a))
 				return false;
-			if (!ASAPWriter_WriteByte(self, 144))
+			if (!ASAPWriter_WriteByte(self, 0x90))
 				return false;
 			if (!ASAPWriter_WriteByte(self, 5))
 				return false;
-			if (!ASAPWriter_WriteByte(self, 176))
+			if (!ASAPWriter_WriteByte(self, 0xb0))
 				return false;
 			if (!ASAPWriter_WriteByte(self, 6))
 				return false;
 			break;
 		case 3:
 		case 4:
-			if (!ASAPWriter_WriteByte(self, 160))
+			if (!ASAPWriter_WriteByte(self, 0xa0))
 				return false;
 			if (!ASAPWriter_WriteByte(self, 1))
 				return false;
-			if (!ASAPWriter_WriteByte(self, 132))
+			if (!ASAPWriter_WriteByte(self, 0x84))
 				return false;
 			if (!ASAPWriter_WriteByte(self, 0))
 				return false;
-			if (!ASAPWriter_WriteByte(self, 208))
+			if (!ASAPWriter_WriteByte(self, 0xd0))
 				return false;
 			if (!ASAPWriter_WriteByte(self, 10))
 				return false;
-			if (!ASAPWriter_WriteByte(self, 198))
+			if (!ASAPWriter_WriteByte(self, 0xc6))
 				return false;
 			if (!ASAPWriter_WriteByte(self, 0))
 				return false;
-			if (!ASAPWriter_WriteByte(self, 208))
+			if (!ASAPWriter_WriteByte(self, 0xd0))
 				return false;
 			if (!ASAPWriter_WriteByte(self, 12))
 				return false;
-			if (!ASAPWriter_WriteByte(self, 160))
+			if (!ASAPWriter_WriteByte(self, 0xa0))
 				return false;
 			if (!ASAPWriter_WriteByte(self, perFrame))
 				return false;
-			if (!ASAPWriter_WriteByte(self, 132))
+			if (!ASAPWriter_WriteByte(self, 0x84))
 				return false;
 			if (!ASAPWriter_WriteByte(self, 0))
 				return false;
-			if (!ASAPWriter_WriteByte(self, 208))
+			if (!ASAPWriter_WriteByte(self, 0xd0))
 				return false;
 			if (!ASAPWriter_WriteByte(self, 3))
 				return false;
@@ -5789,57 +5789,57 @@ static bool ASAPWriter_WriteExecutable(ASAPWriter *self, bool toSap, const ASAPI
 			return false;
 		break;
 	case ASAPModuleType_TM2:
-		self->init = 4992;
-		self->player = 2051;
+		self->init = 0x1380;
+		self->player = 0x803;
 		if (toSap) {
 			if (!ASAPWriter_WriteSapHeader(self, info, 'B'))
 				return false;
 		}
 		if (ASAPWriter_WriteNative(self, info, module, moduleLen, false) == NULL)
 			return false;
-		if (!ASAPWriter_WriteWord(self, 4992))
+		if (!ASAPWriter_WriteWord(self, 0x1380))
 			return false;
 		if (ASAPInfo_GetSongs(info) != 1) {
 			if (!ASAPWriter_WriteWord(self, 5008))
 				return false;
-			if (!ASAPWriter_WriteByte(self, 72))
+			if (!ASAPWriter_WriteByte(self, 0x48))
 				return false;
 		}
 		else {
 			if (!ASAPWriter_WriteWord(self, 5006))
 				return false;
 		}
-		if (!ASAPWriter_WriteByte(self, 160))
+		if (!ASAPWriter_WriteByte(self, 0xa0))
 			return false;
-		if (!ASAPWriter_WriteByte(self, music & 255))
+		if (!ASAPWriter_WriteByte(self, music & 0xff))
 			return false;
-		if (!ASAPWriter_WriteByte(self, 162))
+		if (!ASAPWriter_WriteByte(self, 0xa2))
 			return false;
 		if (!ASAPWriter_WriteByte(self, music >> 8))
 			return false;
-		if (!ASAPWriter_WriteByte(self, 169))
+		if (!ASAPWriter_WriteByte(self, 0xa9))
 			return false;
-		if (!ASAPWriter_WriteByte(self, 112))
+		if (!ASAPWriter_WriteByte(self, 0x70))
 			return false;
-		if (!ASAPWriter_WriteByte(self, 32))
+		if (!ASAPWriter_WriteByte(self, 0x20))
 			return false;
-		if (!ASAPWriter_WriteWord(self, 2048))
+		if (!ASAPWriter_WriteWord(self, 0x800))
 			return false;
 		if (ASAPInfo_GetSongs(info) != 1) {
 			if (!ASAPWriter_WritePlaTaxLda0(self))
 				return false;
 		}
 		else {
-			if (!ASAPWriter_WriteByte(self, 169))
+			if (!ASAPWriter_WriteByte(self, 0xa9))
 				return false;
 			if (!ASAPWriter_WriteByte(self, 0))
 				return false;
-			if (!ASAPWriter_WriteByte(self, 170))
+			if (!ASAPWriter_WriteByte(self, 0xaa))
 				return false;
 		}
-		if (!ASAPWriter_WriteByte(self, 76))
+		if (!ASAPWriter_WriteByte(self, 0x4c))
 			return false;
-		if (!ASAPWriter_WriteWord(self, 2048))
+		if (!ASAPWriter_WriteWord(self, 0x800))
 			return false;
 		if (!ASAPWriter_WriteBytes(self, playerRoutine, 2, playerLastByte - player + 7))
 			return false;
@@ -5851,7 +5851,7 @@ static bool ASAPWriter_WriteExecutable(ASAPWriter *self, bool toSap, const ASAPI
 			if (!ASAPWriter_WriteSapHeader(self, info, 'B'))
 				return false;
 		}
-		if (!ASAPWriter_WriteWord(self, 65535))
+		if (!ASAPWriter_WriteWord(self, 0xffff))
 			return false;
 		if (!ASAPWriter_WriteWord(self, music))
 			return false;
@@ -5907,12 +5907,12 @@ static int ASAPWriter_FormatXexInfoText(uint8_t *dest, int destLen, int endColum
 
 static bool ASAPWriter_WriteXexInfoTextDl(ASAPWriter *self, int address, int len, int verticalScrollAt)
 {
-	if (!ASAPWriter_WriteByte(self, verticalScrollAt == 0 ? 98 : 66))
+	if (!ASAPWriter_WriteByte(self, verticalScrollAt == 0 ? 0x62 : 0x42))
 		return false;
 	if (!ASAPWriter_WriteWord(self, address))
 		return false;
 	for (int i = 32; i < len; i += 32) {
-		if (!ASAPWriter_WriteByte(self, i == verticalScrollAt ? 34 : 2))
+		if (!ASAPWriter_WriteByte(self, i == verticalScrollAt ? 0x22 : 2))
 			return false;
 	}
 	return true;
@@ -5942,7 +5942,7 @@ static bool ASAPWriter_WriteXexInfo(ASAPWriter *self, const ASAPInfo *info)
 		otherLen = ASAPWriter_PadXexInfo(other, otherLen, 0);
 	int totalCharacters = titleLen + authorLen + otherLen;
 	int totalLines = totalCharacters / 32;
-	int otherAddress = 64592 - otherLen;
+	int otherAddress = 0xfc50 - otherLen;
 	int titleAddress = otherAddress - authorLen - 8 - titleLen;
 	if (!ASAPWriter_WriteWord(self, titleAddress))
 		return false;
@@ -5951,7 +5951,7 @@ static bool ASAPWriter_WriteXexInfo(ASAPWriter *self, const ASAPInfo *info)
 	if (!ASAPWriter_WriteBytes(self, title, 0, titleLen))
 		return false;
 	for (int i = 0; i < 8; i++) {
-		if (!ASAPWriter_WriteByte(self, 85))
+		if (!ASAPWriter_WriteByte(self, 0x55))
 			return false;
 	}
 	if (!ASAPWriter_WriteBytes(self, author, 0, authorLen))
@@ -5959,10 +5959,10 @@ static bool ASAPWriter_WriteXexInfo(ASAPWriter *self, const ASAPInfo *info)
 	if (!ASAPWriter_WriteBytes(self, other, 0, otherLen))
 		return false;
 	for (int i = totalLines; i < 26; i++) {
-		if (!ASAPWriter_WriteByte(self, 112))
+		if (!ASAPWriter_WriteByte(self, 0x70))
 			return false;
 	}
-	if (!ASAPWriter_WriteByte(self, 48))
+	if (!ASAPWriter_WriteByte(self, 0x30))
 		return false;
 	if (!ASAPWriter_WriteXexInfoTextDl(self, titleAddress, titleLen, titleLen - 32))
 		return false;
@@ -5974,7 +5974,7 @@ static bool ASAPWriter_WriteXexInfo(ASAPWriter *self, const ASAPInfo *info)
 		if (!ASAPWriter_WriteByte(self, 2))
 			return false;
 	}
-	if (!ASAPWriter_WriteByte(self, 16))
+	if (!ASAPWriter_WriteByte(self, 0x10))
 		return false;
 	for (int i = 0; i < otherLen; i += 32) {
 		if (!ASAPWriter_WriteByte(self, 2))
@@ -6001,9 +6001,9 @@ static bool ASAPWriter_Save(ASAPWriter *self, const char *filename, uint8_t cons
 static bool ASAPWriter_WriteMptSamples(ASAPWriter *self, const char *moduleFilename, const ASAPInfo *info, uint8_t const *module, int moduleLen, int extNumber)
 {
 	int offset = info->headerLen + self->outputLen + 4;
-	if (offset + 256 >= moduleLen || module[offset - 4] != 224 || module[offset - 2] != 255)
+	if (offset + 0x100 >= moduleLen || module[offset - 4] != 0xe0 || module[offset - 2] != 0xff)
 		return false;
-	int length = (module[offset - 1] - module[offset - 3]) << 8 | 32;
+	int length = (module[offset - 1] - module[offset - 3]) << 8 | 0x20;
 	if (offset + length >= moduleLen)
 		return false;
 	ptrdiff_t moduleExt = (ptrdiff_t) strlen(moduleFilename) - 3;
@@ -6039,15 +6039,15 @@ bool ASAPWriter_Write(ASAPWriter *self, const char *targetFilename, const ASAPIn
 			if (!ASAPWriter_WriteWord(self, self->init))
 				return false;
 			if (self->player < 0) {
-				if (!ASAPWriter_WriteByte(self, 96))
+				if (!ASAPWriter_WriteByte(self, 0x60))
 					return false;
-				if (!ASAPWriter_WriteByte(self, 96))
+				if (!ASAPWriter_WriteByte(self, 0x60))
 					return false;
-				if (!ASAPWriter_WriteByte(self, 96))
+				if (!ASAPWriter_WriteByte(self, 0x60))
 					return false;
 			}
 			else {
-				if (!ASAPWriter_WriteByte(self, 76))
+				if (!ASAPWriter_WriteByte(self, 0x4c))
 					return false;
 				if (!ASAPWriter_WriteWord(self, self->player))
 					return false;
@@ -6062,7 +6062,7 @@ bool ASAPWriter_Write(ASAPWriter *self, const char *targetFilename, const ASAPIn
 				return false;
 			if (!ASAPWriter_WriteWord(self, self->init))
 				return false;
-			if (!ASAPWriter_WriteByte(self, 76))
+			if (!ASAPWriter_WriteByte(self, 0x4c))
 				return false;
 			if (!ASAPWriter_WriteWord(self, self->player))
 				return false;
@@ -6085,11 +6085,11 @@ bool ASAPWriter_Write(ASAPWriter *self, const char *targetFilename, const ASAPIn
 			if (!ASAPWriter_WriteXexInfo(self, info))
 				return false;
 		}
-		if (!ASAPWriter_WriteWord(self, 736))
+		if (!ASAPWriter_WriteWord(self, 0x2e0))
 			return false;
-		if (!ASAPWriter_WriteWord(self, 737))
+		if (!ASAPWriter_WriteWord(self, 0x2e1))
 			return false;
-		if (!ASAPWriter_WriteWord(self, tag ? 256 : 292))
+		if (!ASAPWriter_WriteWord(self, tag ? 0x100 : 0x124))
 			return false;
 		FlashPack flashPack;
 		if (!FlashPack_Compress(&flashPack, self))
@@ -6147,7 +6147,7 @@ static void Cpu6502_Reset(Cpu6502 *self)
 
 static int Cpu6502_Peek(const Cpu6502 *self, int addr)
 {
-	if ((addr & 63744) == 53248)
+	if ((addr & 0xf900) == 0xd000)
 		return ASAP_PeekHardware(self->asap, addr);
 	else
 		return self->memory[addr];
@@ -6155,7 +6155,7 @@ static int Cpu6502_Peek(const Cpu6502 *self, int addr)
 
 static void Cpu6502_Poke(Cpu6502 *self, int addr, int data)
 {
-	if ((addr & 63744) == 53248)
+	if ((addr & 0xf900) == 0xd000)
 		ASAP_PokeHardware(self->asap, addr, data);
 	else
 		self->memory[addr] = (uint8_t) data;
@@ -6163,7 +6163,7 @@ static void Cpu6502_Poke(Cpu6502 *self, int addr, int data)
 
 static int Cpu6502_PeekReadModifyWrite(Cpu6502 *self, int addr)
 {
-	if (addr >> 8 == 210) {
+	if (addr >> 8 == 0xd2) {
 		self->cycle--;
 		int data = ASAP_PeekHardware(self->asap, addr);
 		ASAP_PokeHardware(self->asap, addr, data);
@@ -6175,15 +6175,15 @@ static int Cpu6502_PeekReadModifyWrite(Cpu6502 *self, int addr)
 
 static int Cpu6502_Pull(Cpu6502 *self)
 {
-	int s = (self->s + 1) & 255;
+	int s = (self->s + 1) & 0xff;
 	self->s = s;
-	return self->memory[256 + s];
+	return self->memory[0x100 + s];
 }
 
 static void Cpu6502_PullFlags(Cpu6502 *self)
 {
 	int data = Cpu6502_Pull(self);
-	self->nz = ((data & 128) << 1) + (~data & 2);
+	self->nz = ((data & 0x80) << 1) + (~data & 0x2);
 	self->c = data & 1;
 	self->vdi = data & 76;
 }
@@ -6191,22 +6191,22 @@ static void Cpu6502_PullFlags(Cpu6502 *self)
 static void Cpu6502_Push(Cpu6502 *self, int data)
 {
 	int s = self->s;
-	self->memory[256 + s] = (uint8_t) data;
-	self->s = (s - 1) & 255;
+	self->memory[0x100 + s] = (uint8_t) data;
+	self->s = (s - 1) & 0xff;
 }
 
 static void Cpu6502_PushPc(Cpu6502 *self)
 {
 	Cpu6502_Push(self, self->pc >> 8);
-	Cpu6502_Push(self, self->pc & 255);
+	Cpu6502_Push(self, self->pc & 0xff);
 }
 
 static void Cpu6502_PushFlags(Cpu6502 *self, int b)
 {
 	int nz = self->nz;
-	b += ((nz | nz >> 1) & 128) + self->vdi + self->c;
-	if ((nz & 255) == 0)
-		b += 2;
+	b += ((nz | nz >> 1) & 0x80) + self->vdi + self->c;
+	if ((nz & 0xff) == 0)
+		b += 0x2;
 	Cpu6502_Push(self, b);
 }
 
@@ -6215,23 +6215,23 @@ static void Cpu6502_AddWithCarry(Cpu6502 *self, int data)
 	int a = self->a;
 	int vdi = self->vdi;
 	int tmp = a + data + self->c;
-	self->nz = tmp & 255;
-	if ((vdi & 8) == 0) {
-		self->vdi = (vdi & 12) + ((~(data ^ a) & (a ^ tmp)) >> 1 & 64);
+	self->nz = tmp & 0xff;
+	if ((vdi & 0x8) == 0) {
+		self->vdi = (vdi & 12) + ((~(data ^ a) & (a ^ tmp)) >> 1 & 0x40);
 		self->c = tmp >> 8;
 		self->a = self->nz;
 	}
 	else {
-		int al = (a & 15) + (data & 15) + self->c;
+		int al = (a & 0xf) + (data & 0xf) + self->c;
 		if (al >= 10) {
 			tmp += al < 26 ? 6 : -10;
 			if (self->nz != 0)
-				self->nz = (tmp & 128) + 1;
+				self->nz = (tmp & 0x80) + 1;
 		}
-		self->vdi = (vdi & 12) + ((~(data ^ a) & (a ^ tmp)) >> 1 & 64);
-		if (tmp >= 160) {
+		self->vdi = (vdi & 12) + ((~(data ^ a) & (a ^ tmp)) >> 1 & 0x40);
+		if (tmp >= 0xa0) {
 			self->c = 1;
-			self->a = (tmp - 160) & 255;
+			self->a = (tmp - 0xa0) & 0xff;
 		}
 		else {
 			self->c = 0;
@@ -6246,15 +6246,15 @@ static void Cpu6502_SubtractWithCarry(Cpu6502 *self, int data)
 	int vdi = self->vdi;
 	int borrow = self->c - 1;
 	int tmp = a - data + borrow;
-	int al = (a & 15) - (data & 15) + borrow;
-	self->vdi = (vdi & 12) + (((data ^ a) & (a ^ tmp)) >> 1 & 64);
+	int al = (a & 0xf) - (data & 0xf) + borrow;
+	self->vdi = (vdi & 12) + (((data ^ a) & (a ^ tmp)) >> 1 & 0x40);
 	self->c = tmp >= 0 ? 1 : 0;
-	self->nz = self->a = tmp & 255;
-	if ((vdi & 8) != 0) {
+	self->nz = self->a = tmp & 0xff;
+	if ((vdi & 0x8) != 0) {
 		if (al < 0)
 			self->a += al < -10 ? 10 : -6;
 		if (self->c == 0)
-			self->a = (self->a - 96) & 255;
+			self->a = (self->a - 0x60) & 0xff;
 	}
 }
 
@@ -6262,7 +6262,7 @@ static int Cpu6502_ArithmeticShiftLeft(Cpu6502 *self, int addr)
 {
 	int data = Cpu6502_PeekReadModifyWrite(self, addr);
 	self->c = data >> 7;
-	data = data << 1 & 255;
+	data = data << 1 & 0xff;
 	Cpu6502_Poke(self, addr, data);
 	return data;
 }
@@ -6271,7 +6271,7 @@ static int Cpu6502_RotateLeft(Cpu6502 *self, int addr)
 {
 	int data = (Cpu6502_PeekReadModifyWrite(self, addr) << 1) + self->c;
 	self->c = data >> 8;
-	data &= 255;
+	data &= 0xff;
 	Cpu6502_Poke(self, addr, data);
 	return data;
 }
@@ -6296,14 +6296,14 @@ static int Cpu6502_RotateRight(Cpu6502 *self, int addr)
 
 static int Cpu6502_Decrement(Cpu6502 *self, int addr)
 {
-	int data = (Cpu6502_PeekReadModifyWrite(self, addr) - 1) & 255;
+	int data = (Cpu6502_PeekReadModifyWrite(self, addr) - 1) & 0xff;
 	Cpu6502_Poke(self, addr, data);
 	return data;
 }
 
 static int Cpu6502_Increment(Cpu6502 *self, int addr)
 {
-	int data = (Cpu6502_PeekReadModifyWrite(self, addr) + 1) & 255;
+	int data = (Cpu6502_PeekReadModifyWrite(self, addr) + 1) & 0xff;
 	Cpu6502_Poke(self, addr, data);
 	return data;
 }
@@ -6312,15 +6312,15 @@ static void Cpu6502_ExecuteIrq(Cpu6502 *self, int b)
 {
 	Cpu6502_PushPc(self);
 	Cpu6502_PushFlags(self, b);
-	self->vdi |= 4;
-	self->pc = self->memory[65534] + (self->memory[65535] << 8);
+	self->vdi |= 0x4;
+	self->pc = self->memory[0xfffe] + (self->memory[0xffff] << 8);
 }
 
 static void Cpu6502_CheckIrq(Cpu6502 *self)
 {
-	if ((self->vdi & 4) == 0 && ASAP_IsIrq(self->asap)) {
+	if ((self->vdi & 0x4) == 0 && ASAP_IsIrq(self->asap)) {
 		self->cycle += 7;
-		Cpu6502_ExecuteIrq(self, 32);
+		Cpu6502_ExecuteIrq(self, 0x20);
 	}
 }
 
@@ -6329,7 +6329,7 @@ static void Cpu6502_Shx(Cpu6502 *self, int addr, int data)
 	addr += self->memory[self->pc++];
 	int hi = self->memory[self->pc++];
 	data &= hi + 1;
-	if (addr >= 256)
+	if (addr >= 0x100)
 		hi = data - 1;
 	addr += hi << 8;
 	Cpu6502_Poke(self, addr, data);
@@ -6362,734 +6362,734 @@ static void Cpu6502_DoFrame(Cpu6502 *self, int cycleLimit)
 		self->cycle += OPCODE_CYCLES[data];
 		int addr = 0;
 		switch (data) {
-		case 0:
+		case 0x0:
 			self->pc++;
-			Cpu6502_ExecuteIrq(self, 48);
+			Cpu6502_ExecuteIrq(self, 0x30);
 			continue;
-		case 1:
-		case 3:
-		case 33:
-		case 35:
-		case 65:
-		case 67:
-		case 97:
-		case 99:
-		case 129:
-		case 131:
-		case 161:
-		case 163:
-		case 193:
-		case 195:
-		case 225:
-		case 227:
-			addr = (self->memory[self->pc++] + self->x) & 255;
-			addr = self->memory[addr] + (self->memory[(addr + 1) & 255] << 8);
+		case 0x1:
+		case 0x3:
+		case 0x21:
+		case 0x23:
+		case 0x41:
+		case 0x43:
+		case 0x61:
+		case 0x63:
+		case 0x81:
+		case 0x83:
+		case 0xa1:
+		case 0xa3:
+		case 0xc1:
+		case 0xc3:
+		case 0xe1:
+		case 0xe3:
+			addr = (self->memory[self->pc++] + self->x) & 0xff;
+			addr = self->memory[addr] + (self->memory[(addr + 1) & 0xff] << 8);
 			break;
-		case 2:
-		case 18:
-		case 34:
-		case 50:
-		case 66:
-		case 82:
-		case 98:
-		case 114:
-		case 146:
-		case 178:
-		case 210:
-		case 242:
+		case 0x2:
+		case 0x12:
+		case 0x22:
+		case 0x32:
+		case 0x42:
+		case 0x52:
+		case 0x62:
+		case 0x72:
+		case 0x92:
+		case 0xb2:
+		case 0xd2:
+		case 0xf2:
 			self->pc--;
 			self->cycle = self->asap->nextEventCycle;
 			continue;
-		case 4:
-		case 68:
-		case 100:
-		case 20:
-		case 52:
-		case 84:
-		case 116:
-		case 212:
-		case 244:
-		case 128:
-		case 130:
-		case 137:
-		case 194:
-		case 226:
+		case 0x4:
+		case 0x44:
+		case 0x64:
+		case 0x14:
+		case 0x34:
+		case 0x54:
+		case 0x74:
+		case 0xd4:
+		case 0xf4:
+		case 0x80:
+		case 0x82:
+		case 0x89:
+		case 0xc2:
+		case 0xe2:
 			self->pc++;
 			continue;
-		case 5:
-		case 6:
-		case 7:
-		case 36:
-		case 37:
-		case 38:
-		case 39:
-		case 69:
-		case 70:
-		case 71:
-		case 101:
-		case 102:
-		case 103:
-		case 132:
-		case 133:
-		case 134:
-		case 135:
-		case 164:
-		case 165:
-		case 166:
-		case 167:
-		case 196:
-		case 197:
-		case 198:
-		case 199:
-		case 228:
-		case 229:
-		case 230:
-		case 231:
+		case 0x5:
+		case 0x6:
+		case 0x7:
+		case 0x24:
+		case 0x25:
+		case 0x26:
+		case 0x27:
+		case 0x45:
+		case 0x46:
+		case 0x47:
+		case 0x65:
+		case 0x66:
+		case 0x67:
+		case 0x84:
+		case 0x85:
+		case 0x86:
+		case 0x87:
+		case 0xa4:
+		case 0xa5:
+		case 0xa6:
+		case 0xa7:
+		case 0xc4:
+		case 0xc5:
+		case 0xc6:
+		case 0xc7:
+		case 0xe4:
+		case 0xe5:
+		case 0xe6:
+		case 0xe7:
 			addr = self->memory[self->pc++];
 			break;
-		case 8:
-			Cpu6502_PushFlags(self, 48);
+		case 0x8:
+			Cpu6502_PushFlags(self, 0x30);
 			continue;
-		case 9:
-		case 41:
-		case 73:
-		case 105:
-		case 160:
-		case 162:
-		case 169:
-		case 192:
-		case 201:
-		case 224:
-		case 233:
-		case 235:
+		case 0x9:
+		case 0x29:
+		case 0x49:
+		case 0x69:
+		case 0xa0:
+		case 0xa2:
+		case 0xa9:
+		case 0xc0:
+		case 0xc9:
+		case 0xe0:
+		case 0xe9:
+		case 0xeb:
 			addr = self->pc++;
 			break;
-		case 10:
+		case 0xa:
 			self->c = self->a >> 7;
-			self->nz = self->a = self->a << 1 & 255;
+			self->nz = self->a = self->a << 1 & 0xff;
 			continue;
-		case 11:
-		case 43:
+		case 0xb:
+		case 0x2b:
 			self->nz = self->a &= self->memory[self->pc++];
 			self->c = self->nz >> 7;
 			continue;
-		case 12:
+		case 0xc:
 			self->pc += 2;
 			continue;
-		case 13:
-		case 14:
-		case 15:
-		case 44:
-		case 45:
-		case 46:
-		case 47:
-		case 77:
-		case 78:
-		case 79:
-		case 108:
-		case 109:
-		case 110:
-		case 111:
-		case 140:
-		case 141:
-		case 142:
-		case 143:
-		case 172:
-		case 173:
-		case 174:
-		case 175:
-		case 204:
-		case 205:
-		case 206:
-		case 207:
-		case 236:
-		case 237:
-		case 238:
-		case 239:
+		case 0xd:
+		case 0xe:
+		case 0xf:
+		case 0x2c:
+		case 0x2d:
+		case 0x2e:
+		case 0x2f:
+		case 0x4d:
+		case 0x4e:
+		case 0x4f:
+		case 0x6c:
+		case 0x6d:
+		case 0x6e:
+		case 0x6f:
+		case 0x8c:
+		case 0x8d:
+		case 0x8e:
+		case 0x8f:
+		case 0xac:
+		case 0xad:
+		case 0xae:
+		case 0xaf:
+		case 0xcc:
+		case 0xcd:
+		case 0xce:
+		case 0xcf:
+		case 0xec:
+		case 0xed:
+		case 0xee:
+		case 0xef:
 			addr = self->memory[self->pc++];
 			addr += self->memory[self->pc++] << 8;
 			break;
-		case 16:
-			if (self->nz < 128)
+		case 0x10:
+			if (self->nz < 0x80)
 				break;
 			self->pc++;
 			continue;
-		case 17:
-		case 49:
-		case 81:
-		case 113:
-		case 177:
-		case 179:
-		case 209:
-		case 241:
+		case 0x11:
+		case 0x31:
+		case 0x51:
+		case 0x71:
+		case 0xb1:
+		case 0xb3:
+		case 0xd1:
+		case 0xf1:
 			;
 			int zp = self->memory[self->pc++];
 			addr = self->memory[zp] + self->y;
-			if (addr >= 256)
+			if (addr >= 0x100)
 				self->cycle++;
-			addr = (addr + (self->memory[(zp + 1) & 255] << 8)) & 65535;
+			addr = (addr + (self->memory[(zp + 1) & 0xff] << 8)) & 0xffff;
 			break;
-		case 19:
-		case 51:
-		case 83:
-		case 115:
-		case 145:
-		case 211:
-		case 243:
+		case 0x13:
+		case 0x33:
+		case 0x53:
+		case 0x73:
+		case 0x91:
+		case 0xd3:
+		case 0xf3:
 			addr = self->memory[self->pc++];
-			addr = (self->memory[addr] + (self->memory[(addr + 1) & 255] << 8) + self->y) & 65535;
+			addr = (self->memory[addr] + (self->memory[(addr + 1) & 0xff] << 8) + self->y) & 0xffff;
 			break;
-		case 21:
-		case 22:
-		case 23:
-		case 53:
-		case 54:
-		case 55:
-		case 85:
-		case 86:
-		case 87:
-		case 117:
-		case 118:
-		case 119:
-		case 148:
-		case 149:
-		case 180:
-		case 181:
-		case 213:
-		case 214:
-		case 215:
-		case 245:
-		case 246:
-		case 247:
-			addr = (self->memory[self->pc++] + self->x) & 255;
+		case 0x15:
+		case 0x16:
+		case 0x17:
+		case 0x35:
+		case 0x36:
+		case 0x37:
+		case 0x55:
+		case 0x56:
+		case 0x57:
+		case 0x75:
+		case 0x76:
+		case 0x77:
+		case 0x94:
+		case 0x95:
+		case 0xb4:
+		case 0xb5:
+		case 0xd5:
+		case 0xd6:
+		case 0xd7:
+		case 0xf5:
+		case 0xf6:
+		case 0xf7:
+			addr = (self->memory[self->pc++] + self->x) & 0xff;
 			break;
-		case 24:
+		case 0x18:
 			self->c = 0;
 			continue;
-		case 25:
-		case 57:
-		case 89:
-		case 121:
-		case 185:
-		case 187:
-		case 190:
-		case 191:
-		case 217:
-		case 249:
+		case 0x19:
+		case 0x39:
+		case 0x59:
+		case 0x79:
+		case 0xb9:
+		case 0xbb:
+		case 0xbe:
+		case 0xbf:
+		case 0xd9:
+		case 0xf9:
 			addr = self->memory[self->pc++] + self->y;
-			if (addr >= 256)
+			if (addr >= 0x100)
 				self->cycle++;
-			addr = (addr + (self->memory[self->pc++] << 8)) & 65535;
+			addr = (addr + (self->memory[self->pc++] << 8)) & 0xffff;
 			break;
-		case 27:
-		case 59:
-		case 91:
-		case 123:
-		case 153:
-		case 219:
-		case 251:
+		case 0x1b:
+		case 0x3b:
+		case 0x5b:
+		case 0x7b:
+		case 0x99:
+		case 0xdb:
+		case 0xfb:
 			addr = self->memory[self->pc++] + self->y;
-			addr = (addr + (self->memory[self->pc++] << 8)) & 65535;
+			addr = (addr + (self->memory[self->pc++] << 8)) & 0xffff;
 			break;
-		case 28:
-		case 60:
-		case 92:
-		case 124:
-		case 220:
-		case 252:
-			if (self->memory[self->pc] + self->x >= 256)
+		case 0x1c:
+		case 0x3c:
+		case 0x5c:
+		case 0x7c:
+		case 0xdc:
+		case 0xfc:
+			if (self->memory[self->pc] + self->x >= 0x100)
 				self->cycle++;
 			self->pc += 2;
 			continue;
-		case 29:
-		case 61:
-		case 93:
-		case 125:
-		case 188:
-		case 189:
-		case 221:
-		case 253:
+		case 0x1d:
+		case 0x3d:
+		case 0x5d:
+		case 0x7d:
+		case 0xbc:
+		case 0xbd:
+		case 0xdd:
+		case 0xfd:
 			addr = self->memory[self->pc++] + self->x;
-			if (addr >= 256)
+			if (addr >= 0x100)
 				self->cycle++;
-			addr = (addr + (self->memory[self->pc++] << 8)) & 65535;
+			addr = (addr + (self->memory[self->pc++] << 8)) & 0xffff;
 			break;
-		case 30:
-		case 31:
-		case 62:
-		case 63:
-		case 94:
-		case 95:
-		case 126:
-		case 127:
-		case 157:
-		case 222:
-		case 223:
-		case 254:
-		case 255:
+		case 0x1e:
+		case 0x1f:
+		case 0x3e:
+		case 0x3f:
+		case 0x5e:
+		case 0x5f:
+		case 0x7e:
+		case 0x7f:
+		case 0x9d:
+		case 0xde:
+		case 0xdf:
+		case 0xfe:
+		case 0xff:
 			addr = self->memory[self->pc++] + self->x;
-			addr = (addr + (self->memory[self->pc++] << 8)) & 65535;
+			addr = (addr + (self->memory[self->pc++] << 8)) & 0xffff;
 			break;
-		case 32:
+		case 0x20:
 			addr = self->memory[self->pc++];
 			Cpu6502_PushPc(self);
 			self->pc = addr + (self->memory[self->pc] << 8);
 			continue;
-		case 40:
+		case 0x28:
 			Cpu6502_PullFlags(self);
 			Cpu6502_CheckIrq(self);
 			continue;
-		case 42:
+		case 0x2a:
 			self->a = (self->a << 1) + self->c;
 			self->c = self->a >> 8;
-			self->nz = self->a &= 255;
+			self->nz = self->a &= 0xff;
 			continue;
-		case 48:
-			if (self->nz >= 128)
+		case 0x30:
+			if (self->nz >= 0x80)
 				break;
 			self->pc++;
 			continue;
-		case 56:
+		case 0x38:
 			self->c = 1;
 			continue;
-		case 64:
+		case 0x40:
 			Cpu6502_PullFlags(self);
 			self->pc = Cpu6502_Pull(self);
 			self->pc += Cpu6502_Pull(self) << 8;
 			Cpu6502_CheckIrq(self);
 			continue;
-		case 72:
+		case 0x48:
 			Cpu6502_Push(self, self->a);
 			continue;
-		case 74:
+		case 0x4a:
 			self->c = self->a & 1;
 			self->nz = self->a >>= 1;
 			continue;
-		case 75:
+		case 0x4b:
 			self->a &= self->memory[self->pc++];
 			self->c = self->a & 1;
 			self->nz = self->a >>= 1;
 			continue;
-		case 76:
+		case 0x4c:
 			addr = self->memory[self->pc++];
 			self->pc = addr + (self->memory[self->pc] << 8);
 			continue;
-		case 80:
-			if ((self->vdi & 64) == 0)
+		case 0x50:
+			if ((self->vdi & 0x40) == 0)
 				break;
 			self->pc++;
 			continue;
-		case 88:
+		case 0x58:
 			self->vdi &= 72;
 			Cpu6502_CheckIrq(self);
 			continue;
-		case 96:
+		case 0x60:
 			self->pc = Cpu6502_Pull(self);
 			self->pc += (Cpu6502_Pull(self) << 8) + 1;
 			continue;
-		case 104:
+		case 0x68:
 			self->nz = self->a = Cpu6502_Pull(self);
 			continue;
-		case 106:
+		case 0x6a:
 			self->nz = (self->c << 7) + (self->a >> 1);
 			self->c = self->a & 1;
 			self->a = self->nz;
 			continue;
-		case 107:
+		case 0x6b:
 			data = self->a & self->memory[self->pc++];
 			self->nz = self->a = (data >> 1) + (self->c << 7);
-			self->vdi = (self->vdi & 12) + ((self->a ^ data) & 64);
-			if ((self->vdi & 8) == 0)
+			self->vdi = (self->vdi & 12) + ((self->a ^ data) & 0x40);
+			if ((self->vdi & 0x8) == 0)
 				self->c = data >> 7;
 			else {
-				if ((data & 15) >= 5)
-					self->a = (self->a & 240) + ((self->a + 6) & 15);
-				if (data >= 80) {
-					self->a = (self->a + 96) & 255;
+				if ((data & 0xf) >= 5)
+					self->a = (self->a & 0xf0) + ((self->a + 6) & 0xf);
+				if (data >= 0x50) {
+					self->a = (self->a + 0x60) & 0xff;
 					self->c = 1;
 				}
 				else
 					self->c = 0;
 			}
 			continue;
-		case 112:
-			if ((self->vdi & 64) != 0)
+		case 0x70:
+			if ((self->vdi & 0x40) != 0)
 				break;
 			self->pc++;
 			continue;
-		case 120:
-			self->vdi |= 4;
+		case 0x78:
+			self->vdi |= 0x4;
 			continue;
-		case 136:
-			self->nz = self->y = (self->y - 1) & 255;
+		case 0x88:
+			self->nz = self->y = (self->y - 1) & 0xff;
 			continue;
-		case 138:
+		case 0x8a:
 			self->nz = self->a = self->x;
 			continue;
-		case 139:
+		case 0x8b:
 			data = self->memory[self->pc++];
-			self->a &= (data | 239) & self->x;
+			self->a &= (data | 0xef) & self->x;
 			self->nz = self->a & data;
 			continue;
-		case 144:
+		case 0x90:
 			if (self->c == 0)
 				break;
 			self->pc++;
 			continue;
-		case 147:
+		case 0x93:
 			{
 				addr = self->memory[self->pc++];
-				int hi = self->memory[(addr + 1) & 255];
+				int hi = self->memory[(addr + 1) & 0xff];
 				addr = self->memory[addr];
 				data = (hi + 1) & self->a & self->x;
 				addr += self->y;
-				if (addr >= 256)
+				if (addr >= 0x100)
 					hi = data - 1;
 				addr += hi << 8;
 				Cpu6502_Poke(self, addr, data);
 			}
 			continue;
-		case 150:
-		case 151:
-		case 182:
-		case 183:
-			addr = (self->memory[self->pc++] + self->y) & 255;
+		case 0x96:
+		case 0x97:
+		case 0xb6:
+		case 0xb7:
+			addr = (self->memory[self->pc++] + self->y) & 0xff;
 			break;
-		case 152:
+		case 0x98:
 			self->nz = self->a = self->y;
 			continue;
-		case 154:
+		case 0x9a:
 			self->s = self->x;
 			continue;
-		case 155:
+		case 0x9b:
 			self->s = self->a & self->x;
 			Cpu6502_Shx(self, self->y, self->s);
 			continue;
-		case 156:
+		case 0x9c:
 			Cpu6502_Shx(self, self->x, self->y);
 			continue;
-		case 158:
+		case 0x9e:
 			Cpu6502_Shx(self, self->y, self->x);
 			continue;
-		case 159:
+		case 0x9f:
 			Cpu6502_Shx(self, self->y, self->a & self->x);
 			continue;
-		case 168:
+		case 0xa8:
 			self->nz = self->y = self->a;
 			continue;
-		case 170:
+		case 0xaa:
 			self->nz = self->x = self->a;
 			continue;
-		case 171:
+		case 0xab:
 			self->nz = self->x = self->a &= self->memory[self->pc++];
 			continue;
-		case 176:
+		case 0xb0:
 			if (self->c != 0)
 				break;
 			self->pc++;
 			continue;
-		case 184:
+		case 0xb8:
 			self->vdi &= 12;
 			continue;
-		case 186:
+		case 0xba:
 			self->nz = self->x = self->s;
 			continue;
-		case 200:
-			self->nz = self->y = (self->y + 1) & 255;
+		case 0xc8:
+			self->nz = self->y = (self->y + 1) & 0xff;
 			continue;
-		case 202:
-			self->nz = self->x = (self->x - 1) & 255;
+		case 0xca:
+			self->nz = self->x = (self->x - 1) & 0xff;
 			continue;
-		case 203:
+		case 0xcb:
 			self->nz = self->memory[self->pc++];
 			self->x &= self->a;
 			self->c = self->x >= self->nz ? 1 : 0;
-			self->nz = self->x = (self->x - self->nz) & 255;
+			self->nz = self->x = (self->x - self->nz) & 0xff;
 			continue;
-		case 208:
-			if ((self->nz & 255) != 0)
+		case 0xd0:
+			if ((self->nz & 0xff) != 0)
 				break;
 			self->pc++;
 			continue;
-		case 216:
+		case 0xd8:
 			self->vdi &= 68;
 			continue;
-		case 232:
-			self->nz = self->x = (self->x + 1) & 255;
+		case 0xe8:
+			self->nz = self->x = (self->x + 1) & 0xff;
 			continue;
-		case 234:
-		case 26:
-		case 58:
-		case 90:
-		case 122:
-		case 218:
-		case 250:
+		case 0xea:
+		case 0x1a:
+		case 0x3a:
+		case 0x5a:
+		case 0x7a:
+		case 0xda:
+		case 0xfa:
 			continue;
-		case 240:
-			if ((self->nz & 255) == 0)
+		case 0xf0:
+			if ((self->nz & 0xff) == 0)
 				break;
 			self->pc++;
 			continue;
-		case 248:
-			self->vdi |= 8;
+		case 0xf8:
+			self->vdi |= 0x8;
 			continue;
 		default:
 			abort();
 		}
 		switch (data) {
-		case 1:
-		case 5:
-		case 9:
-		case 13:
-		case 17:
-		case 21:
-		case 25:
-		case 29:
+		case 0x1:
+		case 0x5:
+		case 0x9:
+		case 0xd:
+		case 0x11:
+		case 0x15:
+		case 0x19:
+		case 0x1d:
 			self->nz = self->a |= Cpu6502_Peek(self, addr);
 			break;
-		case 3:
-		case 7:
-		case 15:
-		case 19:
-		case 23:
-		case 27:
-		case 31:
+		case 0x3:
+		case 0x7:
+		case 0xf:
+		case 0x13:
+		case 0x17:
+		case 0x1b:
+		case 0x1f:
 			self->nz = self->a |= Cpu6502_ArithmeticShiftLeft(self, addr);
 			break;
-		case 6:
-		case 14:
-		case 22:
-		case 30:
+		case 0x6:
+		case 0xe:
+		case 0x16:
+		case 0x1e:
 			self->nz = Cpu6502_ArithmeticShiftLeft(self, addr);
 			break;
-		case 16:
-		case 48:
-		case 80:
-		case 112:
-		case 144:
-		case 176:
-		case 208:
-		case 240:
-			addr = (self->memory[self->pc] ^ 128) - 128;
+		case 0x10:
+		case 0x30:
+		case 0x50:
+		case 0x70:
+		case 0x90:
+		case 0xb0:
+		case 0xd0:
+		case 0xf0:
+			addr = (self->memory[self->pc] ^ 0x80) - 0x80;
 			self->pc++;
 			addr += self->pc;
 			self->cycle += (addr ^ self->pc) >> 8 != 0 ? 2 : 1;
 			self->pc = addr;
 			break;
-		case 33:
-		case 37:
-		case 41:
-		case 45:
-		case 49:
-		case 53:
-		case 57:
-		case 61:
+		case 0x21:
+		case 0x25:
+		case 0x29:
+		case 0x2d:
+		case 0x31:
+		case 0x35:
+		case 0x39:
+		case 0x3d:
 			self->nz = self->a &= Cpu6502_Peek(self, addr);
 			break;
-		case 35:
-		case 39:
-		case 47:
-		case 51:
-		case 55:
-		case 59:
-		case 63:
+		case 0x23:
+		case 0x27:
+		case 0x2f:
+		case 0x33:
+		case 0x37:
+		case 0x3b:
+		case 0x3f:
 			self->nz = self->a &= Cpu6502_RotateLeft(self, addr);
 			break;
-		case 36:
-		case 44:
+		case 0x24:
+		case 0x2c:
 			self->nz = Cpu6502_Peek(self, addr);
-			self->vdi = (self->vdi & 12) + (self->nz & 64);
-			self->nz = ((self->nz & 128) << 1) + (self->nz & self->a);
+			self->vdi = (self->vdi & 12) + (self->nz & 0x40);
+			self->nz = ((self->nz & 0x80) << 1) + (self->nz & self->a);
 			break;
-		case 38:
-		case 46:
-		case 54:
-		case 62:
+		case 0x26:
+		case 0x2e:
+		case 0x36:
+		case 0x3e:
 			self->nz = Cpu6502_RotateLeft(self, addr);
 			break;
-		case 65:
-		case 69:
-		case 73:
-		case 77:
-		case 81:
-		case 85:
-		case 89:
-		case 93:
+		case 0x41:
+		case 0x45:
+		case 0x49:
+		case 0x4d:
+		case 0x51:
+		case 0x55:
+		case 0x59:
+		case 0x5d:
 			self->nz = self->a ^= Cpu6502_Peek(self, addr);
 			break;
-		case 67:
-		case 71:
-		case 79:
-		case 83:
-		case 87:
-		case 91:
-		case 95:
+		case 0x43:
+		case 0x47:
+		case 0x4f:
+		case 0x53:
+		case 0x57:
+		case 0x5b:
+		case 0x5f:
 			self->nz = self->a ^= Cpu6502_LogicalShiftRight(self, addr);
 			break;
-		case 70:
-		case 78:
-		case 86:
-		case 94:
+		case 0x46:
+		case 0x4e:
+		case 0x56:
+		case 0x5e:
 			self->nz = Cpu6502_LogicalShiftRight(self, addr);
 			break;
-		case 97:
-		case 101:
-		case 105:
-		case 109:
-		case 113:
-		case 117:
-		case 121:
-		case 125:
+		case 0x61:
+		case 0x65:
+		case 0x69:
+		case 0x6d:
+		case 0x71:
+		case 0x75:
+		case 0x79:
+		case 0x7d:
 			Cpu6502_AddWithCarry(self, Cpu6502_Peek(self, addr));
 			break;
-		case 99:
-		case 103:
-		case 111:
-		case 115:
-		case 119:
-		case 123:
-		case 127:
+		case 0x63:
+		case 0x67:
+		case 0x6f:
+		case 0x73:
+		case 0x77:
+		case 0x7b:
+		case 0x7f:
 			Cpu6502_AddWithCarry(self, Cpu6502_RotateRight(self, addr));
 			break;
-		case 102:
-		case 110:
-		case 118:
-		case 126:
+		case 0x66:
+		case 0x6e:
+		case 0x76:
+		case 0x7e:
 			self->nz = Cpu6502_RotateRight(self, addr);
 			break;
-		case 108:
+		case 0x6c:
 			self->pc = self->memory[addr];
-			if ((++addr & 255) == 0)
-				addr -= 255;
+			if ((++addr & 0xff) == 0)
+				addr -= 0xff;
 			self->pc += self->memory[addr] << 8;
 			break;
-		case 129:
-		case 133:
-		case 141:
-		case 145:
-		case 149:
-		case 153:
-		case 157:
+		case 0x81:
+		case 0x85:
+		case 0x8d:
+		case 0x91:
+		case 0x95:
+		case 0x99:
+		case 0x9d:
 			Cpu6502_Poke(self, addr, self->a);
 			break;
-		case 131:
-		case 135:
-		case 143:
-		case 151:
+		case 0x83:
+		case 0x87:
+		case 0x8f:
+		case 0x97:
 			Cpu6502_Poke(self, addr, self->a & self->x);
 			break;
-		case 132:
-		case 140:
-		case 148:
+		case 0x84:
+		case 0x8c:
+		case 0x94:
 			Cpu6502_Poke(self, addr, self->y);
 			break;
-		case 134:
-		case 142:
-		case 150:
+		case 0x86:
+		case 0x8e:
+		case 0x96:
 			Cpu6502_Poke(self, addr, self->x);
 			break;
-		case 160:
-		case 164:
-		case 172:
-		case 180:
-		case 188:
+		case 0xa0:
+		case 0xa4:
+		case 0xac:
+		case 0xb4:
+		case 0xbc:
 			self->nz = self->y = Cpu6502_Peek(self, addr);
 			break;
-		case 161:
-		case 165:
-		case 169:
-		case 173:
-		case 177:
-		case 181:
-		case 185:
-		case 189:
+		case 0xa1:
+		case 0xa5:
+		case 0xa9:
+		case 0xad:
+		case 0xb1:
+		case 0xb5:
+		case 0xb9:
+		case 0xbd:
 			self->nz = self->a = Cpu6502_Peek(self, addr);
 			break;
-		case 162:
-		case 166:
-		case 174:
-		case 182:
-		case 190:
+		case 0xa2:
+		case 0xa6:
+		case 0xae:
+		case 0xb6:
+		case 0xbe:
 			self->nz = self->x = Cpu6502_Peek(self, addr);
 			break;
-		case 163:
-		case 167:
-		case 175:
-		case 179:
-		case 183:
-		case 191:
+		case 0xa3:
+		case 0xa7:
+		case 0xaf:
+		case 0xb3:
+		case 0xb7:
+		case 0xbf:
 			self->nz = self->x = self->a = Cpu6502_Peek(self, addr);
 			break;
-		case 187:
+		case 0xbb:
 			self->nz = self->x = self->a = self->s &= Cpu6502_Peek(self, addr);
 			break;
-		case 192:
-		case 196:
-		case 204:
+		case 0xc0:
+		case 0xc4:
+		case 0xcc:
 			self->nz = Cpu6502_Peek(self, addr);
 			self->c = self->y >= self->nz ? 1 : 0;
-			self->nz = (self->y - self->nz) & 255;
+			self->nz = (self->y - self->nz) & 0xff;
 			break;
-		case 193:
-		case 197:
-		case 201:
-		case 205:
-		case 209:
-		case 213:
-		case 217:
-		case 221:
+		case 0xc1:
+		case 0xc5:
+		case 0xc9:
+		case 0xcd:
+		case 0xd1:
+		case 0xd5:
+		case 0xd9:
+		case 0xdd:
 			self->nz = Cpu6502_Peek(self, addr);
 			self->c = self->a >= self->nz ? 1 : 0;
-			self->nz = (self->a - self->nz) & 255;
+			self->nz = (self->a - self->nz) & 0xff;
 			break;
-		case 195:
-		case 199:
-		case 207:
-		case 211:
-		case 215:
-		case 219:
-		case 223:
+		case 0xc3:
+		case 0xc7:
+		case 0xcf:
+		case 0xd3:
+		case 0xd7:
+		case 0xdb:
+		case 0xdf:
 			data = Cpu6502_Decrement(self, addr);
 			self->c = self->a >= data ? 1 : 0;
-			self->nz = (self->a - data) & 255;
+			self->nz = (self->a - data) & 0xff;
 			break;
-		case 198:
-		case 206:
-		case 214:
-		case 222:
+		case 0xc6:
+		case 0xce:
+		case 0xd6:
+		case 0xde:
 			self->nz = Cpu6502_Decrement(self, addr);
 			break;
-		case 224:
-		case 228:
-		case 236:
+		case 0xe0:
+		case 0xe4:
+		case 0xec:
 			self->nz = Cpu6502_Peek(self, addr);
 			self->c = self->x >= self->nz ? 1 : 0;
-			self->nz = (self->x - self->nz) & 255;
+			self->nz = (self->x - self->nz) & 0xff;
 			break;
-		case 225:
-		case 229:
-		case 233:
-		case 235:
-		case 237:
-		case 241:
-		case 245:
-		case 249:
-		case 253:
+		case 0xe1:
+		case 0xe5:
+		case 0xe9:
+		case 0xeb:
+		case 0xed:
+		case 0xf1:
+		case 0xf5:
+		case 0xf9:
+		case 0xfd:
 			Cpu6502_SubtractWithCarry(self, Cpu6502_Peek(self, addr));
 			break;
-		case 227:
-		case 231:
-		case 239:
-		case 243:
-		case 247:
-		case 251:
-		case 255:
+		case 0xe3:
+		case 0xe7:
+		case 0xef:
+		case 0xf3:
+		case 0xf7:
+		case 0xfb:
+		case 0xff:
 			Cpu6502_SubtractWithCarry(self, Cpu6502_Increment(self, addr));
 			break;
-		case 230:
-		case 238:
-		case 246:
-		case 254:
+		case 0xe6:
+		case 0xee:
+		case 0xf6:
+		case 0xfe:
 			self->nz = Cpu6502_Increment(self, addr);
 			break;
 		default:
@@ -7105,10 +7105,10 @@ static int FlashPackItem_WriteValueTo(const FlashPackItem *self, uint8_t *buffer
 		buffer[index] = (uint8_t) self->value;
 		return 1;
 	case FlashPackItemType_COPY_TWO_BYTES:
-		buffer[index] = (uint8_t) ((128 - self->value) << 1);
+		buffer[index] = (uint8_t) ((0x80 - self->value) << 1);
 		return 1;
 	case FlashPackItemType_COPY_THREE_BYTES:
-		buffer[index] = (uint8_t) (((128 - self->value) << 1) + 1);
+		buffer[index] = (uint8_t) (((0x80 - self->value) << 1) + 1);
 		return 1;
 	case FlashPackItemType_COPY_MANY_BYTES:
 		buffer[index] = 1;
@@ -7116,7 +7116,7 @@ static int FlashPackItem_WriteValueTo(const FlashPackItem *self, uint8_t *buffer
 		return 2;
 	case FlashPackItemType_SET_ADDRESS:
 		;
-		int value = self->value - 128;
+		int value = self->value - 0x80;
 		buffer[index] = 0;
 		buffer[index + 1] = (uint8_t) value;
 		buffer[index + 2] = (uint8_t) (value >> 8);
@@ -7130,7 +7130,7 @@ static int FlashPackItem_WriteValueTo(const FlashPackItem *self, uint8_t *buffer
 
 static int FlashPack_FindHole(const FlashPack *self)
 {
-	int end = 48159;
+	int end = 0xbc1f;
 	for (;;) {
 		while (self->memory[end] >= 0)
 			if (--end < 9216)
@@ -7153,8 +7153,8 @@ static int FlashPack_GetInnerFlags(const FlashPack *self, int index)
 				flags++;
 		}
 	}
-	while (flags < 256);
-	return flags & 255;
+	while (flags < 0x100);
+	return flags & 0xff;
 }
 
 static void FlashPack_PutItems(FlashPack *self)
@@ -7162,7 +7162,7 @@ static void FlashPack_PutItems(FlashPack *self)
 	int outerFlags = 0;
 	for (int i = 0; i < self->itemsCount; i += 8) {
 		if (FlashPack_GetInnerFlags(self, i) != 0)
-			outerFlags |= 128 >> (i >> 3);
+			outerFlags |= 0x80 >> (i >> 3);
 	}
 	self->compressed[self->compressedLength++] = (uint8_t) outerFlags;
 	for (int i = 0; i < self->itemsCount; i++) {
@@ -7202,7 +7202,7 @@ static void FlashPack_CompressMemoryArea(FlashPack *self, int startAddress, int 
 		while (address <= endAddress && self->memory[address] >= 0) {
 			int bestMatch = 0;
 			int bestDistance = -1;
-			for (int backAddress = address - 1; backAddress >= startAddress && address - backAddress < 128; backAddress--) {
+			for (int backAddress = address - 1; backAddress >= startAddress && address - backAddress < 0x80; backAddress--) {
 				int match;
 				for (match = 0; address + match <= endAddress; match++) {
 					int data = self->memory[address + match];
@@ -7310,7 +7310,7 @@ static bool FlashPack_Compress(FlashPack *self, ASAPWriter *w)
 	int inputLen = ASAPWriter_GetOutputLength(w);
 	for (int i = 0; i + 5 <= inputLen;) {
 		int startAddress = input[i] + (input[i + 1] << 8);
-		if (startAddress == 65535) {
+		if (startAddress == 0xffff) {
 			i += 2;
 			startAddress = input[i] + (input[i + 1] << 8);
 		}
@@ -7323,38 +7323,38 @@ static bool FlashPack_Compress(FlashPack *self, ASAPWriter *w)
 		while (startAddress <= endAddress)
 			self->memory[startAddress++] = input[i++];
 	}
-	if (self->memory[736] < 0 || self->memory[737] < 0)
+	if (self->memory[0x2e0] < 0 || self->memory[0x2e1] < 0)
 		return false;
-	if (self->memory[252] >= 0 || self->memory[253] >= 0 || self->memory[254] >= 0 || self->memory[255] >= 0)
+	if (self->memory[0xfc] >= 0 || self->memory[0xfd] >= 0 || self->memory[0xfe] >= 0 || self->memory[0xff] >= 0)
 		return false;
-	int runAddress = self->memory[736] + (self->memory[737] << 8);
-	self->memory[736] = self->memory[737] = -1;
+	int runAddress = self->memory[0x2e0] + (self->memory[0x2e1] << 8);
+	self->memory[0x2e0] = self->memory[0x2e1] = -1;
 	int depackerEndAddress = FlashPack_FindHole(self);
 	if (depackerEndAddress == -1)
 		return false;
 	self->compressedLength = 0;
 	self->itemsCount = 0;
-	FlashPack_PutPoke(self, 54286, 0);
-	FlashPack_PutPoke(self, 53774, 0);
-	FlashPack_PutPoke(self, 54272, 0);
-	FlashPack_PutPoke(self, 54017, 254);
-	FlashPack_PutPoke(self, 580, 255);
-	FlashPack_CompressMemoryArea(self, depackerEndAddress, 65535);
+	FlashPack_PutPoke(self, 0xd40e, 0);
+	FlashPack_PutPoke(self, 0xd20e, 0);
+	FlashPack_PutPoke(self, 0xd400, 0);
+	FlashPack_PutPoke(self, 0xd301, 0xfe);
+	FlashPack_PutPoke(self, 0x244, 0xff);
+	FlashPack_CompressMemoryArea(self, depackerEndAddress, 0xffff);
 	FlashPack_CompressMemoryArea(self, 0, depackerEndAddress);
 	FlashPack_PutItem(self, FlashPackItemType_END_OF_STREAM, 0);
 	FlashPack_PutItems(self);
 	int depackerStartAddress = depackerEndAddress - 87;
 	int compressedStartAddress = depackerStartAddress - self->compressedLength;
-	if (compressedStartAddress < 8192)
+	if (compressedStartAddress < 0x2000)
 		return false;
 	ASAPWriter_ClearOutput(w);
-	if (!ASAPWriter_WriteWord(w, 65535))
+	if (!ASAPWriter_WriteWord(w, 0xffff))
 		return false;
-	if (!ASAPWriter_WriteWord(w, 54017))
+	if (!ASAPWriter_WriteWord(w, 0xd301))
 		return false;
-	if (!ASAPWriter_WriteWord(w, 54017))
+	if (!ASAPWriter_WriteWord(w, 0xd301))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 255))
+	if (!ASAPWriter_WriteByte(w, 0xff))
 		return false;
 	if (!ASAPWriter_WriteWord(w, compressedStartAddress))
 		return false;
@@ -7362,167 +7362,167 @@ static bool FlashPack_Compress(FlashPack *self, ASAPWriter *w)
 		return false;
 	if (!ASAPWriter_WriteBytes(w, self->compressed, 0, self->compressedLength))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 173))
+	if (!ASAPWriter_WriteByte(w, 0xad))
 		return false;
 	if (!ASAPWriter_WriteWord(w, compressedStartAddress))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 238))
+	if (!ASAPWriter_WriteByte(w, 0xee))
 		return false;
 	if (!ASAPWriter_WriteWord(w, depackerStartAddress + 1))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 208))
+	if (!ASAPWriter_WriteByte(w, 0xd0))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 3))
+	if (!ASAPWriter_WriteByte(w, 0x3))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 238))
+	if (!ASAPWriter_WriteByte(w, 0xee))
 		return false;
 	if (!ASAPWriter_WriteWord(w, depackerStartAddress + 2))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 96))
+	if (!ASAPWriter_WriteByte(w, 0x60))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 76))
+	if (!ASAPWriter_WriteByte(w, 0x4c))
 		return false;
 	if (!ASAPWriter_WriteWord(w, runAddress))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 133))
+	if (!ASAPWriter_WriteByte(w, 0x85))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 254))
+	if (!ASAPWriter_WriteByte(w, 0xfe))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 138))
+	if (!ASAPWriter_WriteByte(w, 0x8a))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 42))
+	if (!ASAPWriter_WriteByte(w, 0x2a))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 170))
+	if (!ASAPWriter_WriteByte(w, 0xaa))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 240))
+	if (!ASAPWriter_WriteByte(w, 0xf0))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 246))
+	if (!ASAPWriter_WriteByte(w, 0xf6))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 177))
+	if (!ASAPWriter_WriteByte(w, 0xb1))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 254))
+	if (!ASAPWriter_WriteByte(w, 0xfe))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 153))
+	if (!ASAPWriter_WriteByte(w, 0x99))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 128))
+	if (!ASAPWriter_WriteByte(w, 0x80))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 128))
+	if (!ASAPWriter_WriteByte(w, 0x80))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 200))
+	if (!ASAPWriter_WriteByte(w, 0xc8))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 208))
+	if (!ASAPWriter_WriteByte(w, 0xd0))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 9))
+	if (!ASAPWriter_WriteByte(w, 0x9))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 152))
+	if (!ASAPWriter_WriteByte(w, 0x98))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 56))
+	if (!ASAPWriter_WriteByte(w, 0x38))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 101))
+	if (!ASAPWriter_WriteByte(w, 0x65))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 255))
+	if (!ASAPWriter_WriteByte(w, 0xff))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 133))
+	if (!ASAPWriter_WriteByte(w, 0x85))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 255))
+	if (!ASAPWriter_WriteByte(w, 0xff))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 141))
+	if (!ASAPWriter_WriteByte(w, 0x8d))
 		return false;
-	if (!ASAPWriter_WriteWord(w, depackerStartAddress + 26))
+	if (!ASAPWriter_WriteWord(w, depackerStartAddress + 0x1a))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 202))
+	if (!ASAPWriter_WriteByte(w, 0xca))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 208))
+	if (!ASAPWriter_WriteByte(w, 0xd0))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 236))
+	if (!ASAPWriter_WriteByte(w, 0xec))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 6))
+	if (!ASAPWriter_WriteByte(w, 0x6))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 253))
+	if (!ASAPWriter_WriteByte(w, 0xfd))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 208))
+	if (!ASAPWriter_WriteByte(w, 0xd0))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 21))
+	if (!ASAPWriter_WriteByte(w, 0x15))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 6))
+	if (!ASAPWriter_WriteByte(w, 0x6))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 252))
+	if (!ASAPWriter_WriteByte(w, 0xfc))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 208))
+	if (!ASAPWriter_WriteByte(w, 0xd0))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 7))
+	if (!ASAPWriter_WriteByte(w, 0x7))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 56))
+	if (!ASAPWriter_WriteByte(w, 0x38))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 32))
-		return false;
-	if (!ASAPWriter_WriteWord(w, depackerStartAddress))
-		return false;
-	if (!ASAPWriter_WriteByte(w, 42))
-		return false;
-	if (!ASAPWriter_WriteByte(w, 133))
-		return false;
-	if (!ASAPWriter_WriteByte(w, 252))
-		return false;
-	if (!ASAPWriter_WriteByte(w, 169))
-		return false;
-	if (!ASAPWriter_WriteByte(w, 1))
-		return false;
-	if (!ASAPWriter_WriteByte(w, 144))
-		return false;
-	if (!ASAPWriter_WriteByte(w, 4))
-		return false;
-	if (!ASAPWriter_WriteByte(w, 32))
+	if (!ASAPWriter_WriteByte(w, 0x20))
 		return false;
 	if (!ASAPWriter_WriteWord(w, depackerStartAddress))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 42))
+	if (!ASAPWriter_WriteByte(w, 0x2a))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 133))
+	if (!ASAPWriter_WriteByte(w, 0x85))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 253))
+	if (!ASAPWriter_WriteByte(w, 0xfc))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 32))
+	if (!ASAPWriter_WriteByte(w, 0xa9))
 		return false;
-	if (!ASAPWriter_WriteWord(w, depackerStartAddress))
+	if (!ASAPWriter_WriteByte(w, 0x1))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 162))
+	if (!ASAPWriter_WriteByte(w, 0x90))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 1))
+	if (!ASAPWriter_WriteByte(w, 0x4))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 144))
-		return false;
-	if (!ASAPWriter_WriteByte(w, 206))
-		return false;
-	if (!ASAPWriter_WriteByte(w, 74))
-		return false;
-	if (!ASAPWriter_WriteByte(w, 208))
-		return false;
-	if (!ASAPWriter_WriteByte(w, 194))
-		return false;
-	if (!ASAPWriter_WriteByte(w, 32))
+	if (!ASAPWriter_WriteByte(w, 0x20))
 		return false;
 	if (!ASAPWriter_WriteWord(w, depackerStartAddress))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 176))
+	if (!ASAPWriter_WriteByte(w, 0x2a))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 193))
+	if (!ASAPWriter_WriteByte(w, 0x85))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 168))
+	if (!ASAPWriter_WriteByte(w, 0xfd))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 32))
+	if (!ASAPWriter_WriteByte(w, 0x20))
 		return false;
 	if (!ASAPWriter_WriteWord(w, depackerStartAddress))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 144))
+	if (!ASAPWriter_WriteByte(w, 0xa2))
 		return false;
-	if (!ASAPWriter_WriteByte(w, 202))
+	if (!ASAPWriter_WriteByte(w, 0x1))
 		return false;
-	if (!ASAPWriter_WriteWord(w, 736))
+	if (!ASAPWriter_WriteByte(w, 0x90))
 		return false;
-	if (!ASAPWriter_WriteWord(w, 737))
+	if (!ASAPWriter_WriteByte(w, 0xce))
 		return false;
-	return ASAPWriter_WriteWord(w, depackerStartAddress + 50);
+	if (!ASAPWriter_WriteByte(w, 0x4a))
+		return false;
+	if (!ASAPWriter_WriteByte(w, 0xd0))
+		return false;
+	if (!ASAPWriter_WriteByte(w, 0xc2))
+		return false;
+	if (!ASAPWriter_WriteByte(w, 0x20))
+		return false;
+	if (!ASAPWriter_WriteWord(w, depackerStartAddress))
+		return false;
+	if (!ASAPWriter_WriteByte(w, 0xb0))
+		return false;
+	if (!ASAPWriter_WriteByte(w, 0xc1))
+		return false;
+	if (!ASAPWriter_WriteByte(w, 0xa8))
+		return false;
+	if (!ASAPWriter_WriteByte(w, 0x20))
+		return false;
+	if (!ASAPWriter_WriteWord(w, depackerStartAddress))
+		return false;
+	if (!ASAPWriter_WriteByte(w, 0x90))
+		return false;
+	if (!ASAPWriter_WriteByte(w, 0xca))
+		return false;
+	if (!ASAPWriter_WriteWord(w, 0x2e0))
+		return false;
+	if (!ASAPWriter_WriteWord(w, 0x2e1))
+		return false;
+	return ASAPWriter_WriteWord(w, depackerStartAddress + 0x32);
 }
 
 static void PokeyChannel_Initialize(PokeyChannel *self)
@@ -7530,8 +7530,8 @@ static void PokeyChannel_Initialize(PokeyChannel *self)
 	self->audf = 0;
 	self->audc = 0;
 	self->periodCycles = 28;
-	self->tickCycle = 8388608;
-	self->timerCycle = 8388608;
+	self->tickCycle = 0x800000;
+	self->timerCycle = 0x800000;
 	self->mute = 0;
 	self->out = 0;
 	self->delta = 0;
@@ -7552,21 +7552,21 @@ static void PokeyChannel_DoTick(PokeyChannel *self, Pokey *pokey, const PokeyPai
 {
 	self->tickCycle += self->periodCycles;
 	int audc = self->audc;
-	if ((audc & 176) == 160)
+	if ((audc & 0xb0) == 0xa0)
 		self->out ^= 1;
-	else if ((audc & 16) != 0 || pokey->init)
+	else if ((audc & 0x10) != 0 || pokey->init)
 		return;
 	else {
 		int poly = cycle + pokey->polyIndex - ch;
-		if (audc < 128 && (1706902752 & 1 << poly % 31) == 0)
+		if (audc < 0x80 && (0x65bd44e0 & 1 << poly % 31) == 0)
 			return;
-		if ((audc & 32) != 0)
+		if ((audc & 0x20) != 0)
 			self->out ^= 1;
 		else {
 			int newOut;
-			if ((audc & 64) != 0)
-				newOut = 21360 >> poly % 15;
-			else if (pokey->audctl < 128) {
+			if ((audc & 0x40) != 0)
+				newOut = 0x5370 >> poly % 15;
+			else if (pokey->audctl < 0x80) {
 				poly %= 131071;
 				newOut = pokeys->poly17Lookup[poly >> 3] >> (poly & 7);
 			}
@@ -7589,7 +7589,7 @@ static void PokeyChannel_SlopeDown(PokeyChannel *self, Pokey *pokey, const Pokey
 
 static void PokeyChannel_DoStimer(PokeyChannel *self, Pokey *pokey, const PokeyPair *pokeys, int cycle, int reload)
 {
-	if (self->tickCycle != 8388608)
+	if (self->tickCycle != 0x800000)
 		self->tickCycle = cycle + reload;
 	if (self->out != 0) {
 		self->out = 0;
@@ -7601,11 +7601,11 @@ static void PokeyChannel_SetMute(PokeyChannel *self, bool enable, int mask, int 
 {
 	if (enable) {
 		self->mute |= mask;
-		self->tickCycle = 8388608;
+		self->tickCycle = 0x800000;
 	}
 	else {
 		self->mute &= ~mask;
-		if (self->mute == 0 && self->tickCycle == 8388608)
+		if (self->mute == 0 && self->tickCycle == 0x800000)
 			self->tickCycle = cycle;
 	}
 }
@@ -7616,13 +7616,13 @@ static void PokeyChannel_SetAudc(PokeyChannel *self, Pokey *pokey, const PokeyPa
 		return;
 	Pokey_GenerateUntilCycle(pokey, pokeys, cycle);
 	self->audc = data;
-	if ((data & 16) != 0) {
-		data &= 15;
+	if ((data & 0x10) != 0) {
+		data &= 0xf;
 		PokeyChannel_AddDelta(self, pokey, pokeys, cycle, self->delta > 0 ? data - self->delta : data);
 		self->delta = data;
 	}
 	else {
-		data &= 15;
+		data &= 0xf;
 		if (self->delta > 0) {
 			PokeyChannel_AddDelta(self, pokey, pokeys, cycle, data - self->delta);
 			self->delta = data;
@@ -7634,7 +7634,7 @@ static void PokeyChannel_SetAudc(PokeyChannel *self, Pokey *pokey, const PokeyPa
 
 static void PokeyChannel_EndFrame(PokeyChannel *self, int cycle)
 {
-	if (self->timerCycle != 8388608)
+	if (self->timerCycle != 0x800000)
 		self->timerCycle -= cycle;
 }
 
@@ -7665,7 +7665,7 @@ static void Pokey_Initialize(Pokey *self, int sampleRate)
 		PokeyChannel_Initialize(self->channels + c);
 	self->audctl = 0;
 	self->skctl = 3;
-	self->irqst = 255;
+	self->irqst = 0xff;
 	self->init = false;
 	self->divCycles = 28;
 	self->reloadCycles1 = 28;
@@ -7724,12 +7724,12 @@ static void Pokey_GenerateUntilCycle(Pokey *self, const PokeyPair *pokeys, int c
 			PokeyChannel_DoTick(&self->channels[3], self, pokeys, cycle, 3);
 		}
 		if (cycle == self->channels[0].tickCycle) {
-			if ((self->skctl & 136) == 8)
+			if ((self->skctl & 0x88) == 8)
 				self->channels[1].tickCycle = cycle + self->channels[1].periodCycles;
 			PokeyChannel_DoTick(&self->channels[0], self, pokeys, cycle, 0);
 		}
 		if (cycle == self->channels[1].tickCycle) {
-			if ((self->audctl & 16) != 0)
+			if ((self->audctl & 0x10) != 0)
 				self->channels[0].tickCycle = cycle + self->reloadCycles1;
 			else if ((self->skctl & 8) != 0)
 				self->channels[0].tickCycle = cycle + self->channels[0].periodCycles;
@@ -7742,12 +7742,12 @@ static void Pokey_EndFrame(Pokey *self, const PokeyPair *pokeys, int cycle)
 {
 	Pokey_GenerateUntilCycle(self, pokeys, cycle);
 	self->polyIndex += cycle;
-	int m = (self->audctl & 128) != 0 ? 237615 : 60948015;
+	int m = (self->audctl & 0x80) != 0 ? 237615 : 60948015;
 	if (self->polyIndex >= 2 * m)
 		self->polyIndex -= m;
 	for (int c = 0; c < 4; c++) {
 		int tickCycle = self->channels[c].tickCycle;
-		if (tickCycle != 8388608)
+		if (tickCycle != 0x800000)
 			self->channels[c].tickCycle = tickCycle - cycle;
 	}
 }
@@ -7755,7 +7755,7 @@ static void Pokey_EndFrame(Pokey *self, const PokeyPair *pokeys, int cycle)
 static bool Pokey_IsSilent(const Pokey *self)
 {
 	for (int c = 0; c < 4; c++)
-		if ((self->channels[c].audc & 15) != 0)
+		if ((self->channels[c].audc & 0xf) != 0)
 			return false;
 	return true;
 }
@@ -7779,33 +7779,33 @@ static void Pokey_InitMute(Pokey *self, int cycle)
 {
 	bool init = self->init;
 	int audctl = self->audctl;
-	PokeyChannel_SetMute(&self->channels[0], init && (audctl & 64) == 0, 1, cycle);
-	PokeyChannel_SetMute(&self->channels[1], init && (audctl & 80) != 80, 1, cycle);
-	PokeyChannel_SetMute(&self->channels[2], init && (audctl & 32) == 0, 1, cycle);
-	PokeyChannel_SetMute(&self->channels[3], init && (audctl & 40) != 40, 1, cycle);
+	PokeyChannel_SetMute(&self->channels[0], init && (audctl & 0x40) == 0, 1, cycle);
+	PokeyChannel_SetMute(&self->channels[1], init && (audctl & 0x50) != 0x50, 1, cycle);
+	PokeyChannel_SetMute(&self->channels[2], init && (audctl & 0x20) == 0, 1, cycle);
+	PokeyChannel_SetMute(&self->channels[3], init && (audctl & 0x28) != 0x28, 1, cycle);
 }
 
 static int Pokey_Poke(Pokey *self, const PokeyPair *pokeys, int addr, int data, int cycle)
 {
-	int nextEventCycle = 8388608;
-	switch (addr & 15) {
-	case 0:
+	int nextEventCycle = 0x800000;
+	switch (addr & 0xf) {
+	case 0x0:
 		if (data == self->channels[0].audf)
 			break;
 		Pokey_GenerateUntilCycle(self, pokeys, cycle);
 		self->channels[0].audf = data;
-		switch (self->audctl & 80) {
-		case 0:
+		switch (self->audctl & 0x50) {
+		case 0x0:
 			self->channels[0].periodCycles = self->divCycles * (data + 1);
 			break;
-		case 16:
+		case 0x10:
 			self->channels[1].periodCycles = self->divCycles * (data + (self->channels[1].audf << 8) + 1);
 			self->reloadCycles1 = self->divCycles * (data + 1);
 			break;
-		case 64:
+		case 0x40:
 			self->channels[0].periodCycles = data + 4;
 			break;
-		case 80:
+		case 0x50:
 			self->channels[1].periodCycles = data + (self->channels[1].audf << 8) + 7;
 			self->reloadCycles1 = data + 4;
 			break;
@@ -7813,49 +7813,49 @@ static int Pokey_Poke(Pokey *self, const PokeyPair *pokeys, int addr, int data, 
 			abort();
 		}
 		break;
-	case 1:
+	case 0x1:
 		PokeyChannel_SetAudc(&self->channels[0], self, pokeys, data, cycle);
 		break;
-	case 2:
+	case 0x2:
 		if (data == self->channels[1].audf)
 			break;
 		Pokey_GenerateUntilCycle(self, pokeys, cycle);
 		self->channels[1].audf = data;
-		switch (self->audctl & 80) {
-		case 0:
-		case 64:
+		switch (self->audctl & 0x50) {
+		case 0x0:
+		case 0x40:
 			self->channels[1].periodCycles = self->divCycles * (data + 1);
 			break;
-		case 16:
+		case 0x10:
 			self->channels[1].periodCycles = self->divCycles * (self->channels[0].audf + (data << 8) + 1);
 			break;
-		case 80:
+		case 0x50:
 			self->channels[1].periodCycles = self->channels[0].audf + (data << 8) + 7;
 			break;
 		default:
 			abort();
 		}
 		break;
-	case 3:
+	case 0x3:
 		PokeyChannel_SetAudc(&self->channels[1], self, pokeys, data, cycle);
 		break;
-	case 4:
+	case 0x4:
 		if (data == self->channels[2].audf)
 			break;
 		Pokey_GenerateUntilCycle(self, pokeys, cycle);
 		self->channels[2].audf = data;
-		switch (self->audctl & 40) {
-		case 0:
+		switch (self->audctl & 0x28) {
+		case 0x0:
 			self->channels[2].periodCycles = self->divCycles * (data + 1);
 			break;
-		case 8:
+		case 0x8:
 			self->channels[3].periodCycles = self->divCycles * (data + (self->channels[3].audf << 8) + 1);
 			self->reloadCycles3 = self->divCycles * (data + 1);
 			break;
-		case 32:
+		case 0x20:
 			self->channels[2].periodCycles = data + 4;
 			break;
-		case 40:
+		case 0x28:
 			self->channels[3].periodCycles = data + (self->channels[3].audf << 8) + 7;
 			self->reloadCycles3 = data + 4;
 			break;
@@ -7863,53 +7863,53 @@ static int Pokey_Poke(Pokey *self, const PokeyPair *pokeys, int addr, int data, 
 			abort();
 		}
 		break;
-	case 5:
+	case 0x5:
 		PokeyChannel_SetAudc(&self->channels[2], self, pokeys, data, cycle);
 		break;
-	case 6:
+	case 0x6:
 		if (data == self->channels[3].audf)
 			break;
 		Pokey_GenerateUntilCycle(self, pokeys, cycle);
 		self->channels[3].audf = data;
-		switch (self->audctl & 40) {
-		case 0:
-		case 32:
+		switch (self->audctl & 0x28) {
+		case 0x0:
+		case 0x20:
 			self->channels[3].periodCycles = self->divCycles * (data + 1);
 			break;
-		case 8:
+		case 0x8:
 			self->channels[3].periodCycles = self->divCycles * (self->channels[2].audf + (data << 8) + 1);
 			break;
-		case 40:
+		case 0x28:
 			self->channels[3].periodCycles = self->channels[2].audf + (data << 8) + 7;
 			break;
 		default:
 			abort();
 		}
 		break;
-	case 7:
+	case 0x7:
 		PokeyChannel_SetAudc(&self->channels[3], self, pokeys, data, cycle);
 		break;
-	case 8:
+	case 0x8:
 		if (data == self->audctl)
 			break;
 		Pokey_GenerateUntilCycle(self, pokeys, cycle);
 		self->audctl = data;
 		self->divCycles = (data & 1) != 0 ? 114 : 28;
-		switch (data & 80) {
-		case 0:
+		switch (data & 0x50) {
+		case 0x0:
 			self->channels[0].periodCycles = self->divCycles * (self->channels[0].audf + 1);
 			self->channels[1].periodCycles = self->divCycles * (self->channels[1].audf + 1);
 			break;
-		case 16:
+		case 0x10:
 			self->channels[0].periodCycles = self->divCycles << 8;
 			self->channels[1].periodCycles = self->divCycles * (self->channels[0].audf + (self->channels[1].audf << 8) + 1);
 			self->reloadCycles1 = self->divCycles * (self->channels[0].audf + 1);
 			break;
-		case 64:
+		case 0x40:
 			self->channels[0].periodCycles = self->channels[0].audf + 4;
 			self->channels[1].periodCycles = self->divCycles * (self->channels[1].audf + 1);
 			break;
-		case 80:
+		case 0x50:
 			self->channels[0].periodCycles = 256;
 			self->channels[1].periodCycles = self->channels[0].audf + (self->channels[1].audf << 8) + 7;
 			self->reloadCycles1 = self->channels[0].audf + 4;
@@ -7917,21 +7917,21 @@ static int Pokey_Poke(Pokey *self, const PokeyPair *pokeys, int addr, int data, 
 		default:
 			abort();
 		}
-		switch (data & 40) {
-		case 0:
+		switch (data & 0x28) {
+		case 0x0:
 			self->channels[2].periodCycles = self->divCycles * (self->channels[2].audf + 1);
 			self->channels[3].periodCycles = self->divCycles * (self->channels[3].audf + 1);
 			break;
-		case 8:
+		case 0x8:
 			self->channels[2].periodCycles = self->divCycles << 8;
 			self->channels[3].periodCycles = self->divCycles * (self->channels[2].audf + (self->channels[3].audf << 8) + 1);
 			self->reloadCycles3 = self->divCycles * (self->channels[2].audf + 1);
 			break;
-		case 32:
+		case 0x20:
 			self->channels[2].periodCycles = self->channels[2].audf + 4;
 			self->channels[3].periodCycles = self->divCycles * (self->channels[3].audf + 1);
 			break;
-		case 40:
+		case 0x28:
 			self->channels[2].periodCycles = 256;
 			self->channels[3].periodCycles = self->channels[2].audf + (self->channels[3].audf << 8) + 7;
 			self->reloadCycles3 = self->channels[2].audf + 4;
@@ -7941,18 +7941,18 @@ static int Pokey_Poke(Pokey *self, const PokeyPair *pokeys, int addr, int data, 
 		}
 		Pokey_InitMute(self, cycle);
 		break;
-	case 9:
+	case 0x9:
 		Pokey_GenerateUntilCycle(self, pokeys, cycle);
-		PokeyChannel_DoStimer(&self->channels[0], self, pokeys, cycle, (self->audctl & 16) == 0 ? self->channels[0].periodCycles : self->reloadCycles1);
+		PokeyChannel_DoStimer(&self->channels[0], self, pokeys, cycle, (self->audctl & 0x10) == 0 ? self->channels[0].periodCycles : self->reloadCycles1);
 		PokeyChannel_DoStimer(&self->channels[1], self, pokeys, cycle, self->channels[1].periodCycles);
 		PokeyChannel_DoStimer(&self->channels[2], self, pokeys, cycle, (self->audctl & 8) == 0 ? self->channels[2].periodCycles : self->reloadCycles3);
 		PokeyChannel_DoStimer(&self->channels[3], self, pokeys, cycle, self->channels[3].periodCycles);
 		break;
-	case 14:
-		self->irqst |= data ^ 255;
+	case 0xe:
+		self->irqst |= data ^ 0xff;
 		for (int i = 3;; i >>= 1) {
 			if ((data & self->irqst & (i + 1)) != 0) {
-				if (self->channels[i].timerCycle == 8388608) {
+				if (self->channels[i].timerCycle == 0x800000) {
 					int t = self->channels[i].tickCycle;
 					while (t < cycle)
 						t += self->channels[i].periodCycles;
@@ -7962,23 +7962,23 @@ static int Pokey_Poke(Pokey *self, const PokeyPair *pokeys, int addr, int data, 
 				}
 			}
 			else
-				self->channels[i].timerCycle = 8388608;
+				self->channels[i].timerCycle = 0x800000;
 			if (i == 0)
 				break;
 		}
 		break;
-	case 15:
+	case 0xf:
 		if (data == self->skctl)
 			break;
 		Pokey_GenerateUntilCycle(self, pokeys, cycle);
 		self->skctl = data;
 		bool init = (data & 3) == 0;
 		if (self->init && !init)
-			self->polyIndex = ((self->audctl & 128) != 0 ? 237614 : 60948014) - cycle;
+			self->polyIndex = ((self->audctl & 0x80) != 0 ? 237614 : 60948014) - cycle;
 		self->init = init;
 		Pokey_InitMute(self, cycle);
-		PokeyChannel_SetMute(&self->channels[2], (data & 16) != 0, 4, cycle);
-		PokeyChannel_SetMute(&self->channels[3], (data & 16) != 0, 4, cycle);
+		PokeyChannel_SetMute(&self->channels[2], (data & 0x10) != 0, 4, cycle);
+		PokeyChannel_SetMute(&self->channels[3], (data & 0x10) != 0, 4, cycle);
 		break;
 	default:
 		break;
@@ -7992,7 +7992,7 @@ static int Pokey_CheckIrq(Pokey *self, int cycle, int nextEventCycle)
 		int timerCycle = self->channels[i].timerCycle;
 		if (cycle >= timerCycle) {
 			self->irqst &= ~(i + 1);
-			self->channels[i].timerCycle = 8388608;
+			self->channels[i].timerCycle = 0x800000;
 		}
 		else if (nextEventCycle > timerCycle)
 			nextEventCycle = timerCycle;
@@ -8035,14 +8035,14 @@ static void PokeyPair_Construct(PokeyPair *self)
 {
 	Pokey_Construct(&self->basePokey);
 	Pokey_Construct(&self->extraPokey);
-	int reg = 511;
+	int reg = 0x1ff;
 	for (int i = 0; i < 511; i++) {
 		reg = (((reg >> 5 ^ reg) & 1) << 8) + (reg >> 1);
 		self->poly9Lookup[i] = (uint8_t) reg;
 	}
-	reg = 131071;
+	reg = 0x1ffff;
 	for (int i = 0; i < 16385; i++) {
-		reg = (((reg >> 5 ^ reg) & 255) << 9) + (reg >> 8);
+		reg = (((reg >> 5 ^ reg) & 0xff) << 9) + (reg >> 8);
 		self->poly17Lookup[i] = (uint8_t) (reg >> 1);
 	}
 	for (int i = 0; i < 1024; i++) {
@@ -8081,7 +8081,7 @@ static int PokeyPair_GetSampleFactor(const PokeyPair *self, int clock)
 
 static void PokeyPair_Initialize(PokeyPair *self, bool ntsc, bool stereo, int sampleRate)
 {
-	self->extraPokeyMask = stereo ? 16 : 0;
+	self->extraPokeyMask = stereo ? 0x10 : 0;
 	self->sampleRate = sampleRate;
 	Pokey_Initialize(&self->basePokey, sampleRate);
 	Pokey_Initialize(&self->extraPokey, sampleRate);
@@ -8100,21 +8100,21 @@ static int PokeyPair_Poke(PokeyPair *self, int addr, int data, int cycle)
 static int PokeyPair_Peek(const PokeyPair *self, int addr, int cycle)
 {
 	const Pokey *pokey = (addr & self->extraPokeyMask) != 0 ? &self->extraPokey : &self->basePokey;
-	switch (addr & 15) {
-	case 10:
+	switch (addr & 0xf) {
+	case 0xa:
 		if (pokey->init)
-			return 255;
+			return 0xff;
 		int i = cycle + pokey->polyIndex;
-		if ((pokey->audctl & 128) != 0)
+		if ((pokey->audctl & 0x80) != 0)
 			return self->poly9Lookup[i % 511];
 		i %= 131071;
 		int j = i >> 3;
 		i &= 7;
-		return ((self->poly17Lookup[j] >> i) + (self->poly17Lookup[j + 1] << (8 - i))) & 255;
-	case 14:
+		return ((self->poly17Lookup[j] >> i) + (self->poly17Lookup[j + 1] << (8 - i))) & 0xff;
+	case 0xe:
 		return pokey->irqst;
 	default:
-		return 255;
+		return 0xff;
 	}
 }
 
