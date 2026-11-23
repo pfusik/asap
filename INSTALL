@@ -154,7 +154,8 @@ Open the command prompt in the root directory of ASAP sources and run:
 Building the VLC plugin on Windows
 ----------------------------------
 
-TODO: where to get VLC SDK.
+Install VLC (both 32-bit and 64-bit) in their default locations.
+Extract VLC source code to a directory called 'vlc' next to the ASAP directory.
 
 Open the command prompt in the root directory of ASAP sources and run:
 
