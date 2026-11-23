@@ -13,7 +13,7 @@ On Windows, install from MSYS2 (https://www.msys2.org/).
 
 3. If compiling from Git:
 xasm (https://github.com/pfusik/xasm)
-and MADS (http://mads.atari8.info).
+and MADS (https://mads.atari8.info).
 
 Make sure these tools are on your 'PATH'.
 
@@ -129,7 +129,7 @@ asapscan, shell extension and libasap on Windows
 
 Install MSYS2 (https://www.msys2.org/), then additional packages:
 
-    pacman -S make mingw-w64-i686-gcc mingw-w64-x86_64-gcc
+    pacman -S make mingw-w64-i686-gcc mingw-w64-ucrt-x86_64-gcc
 
 Open the command prompt in the root directory of ASAP sources and run:
 
@@ -141,8 +141,8 @@ Building the foobar2000 plugin on Windows
 
 In addition to the common prerequisites you need:
 1. A Microsoft C++ compiler and a Windows SDK.
-   I use Visual Studio Community 2022.
-2. foobar2000 SDK (http://www.foobar2000.org/SDK).
+   I use Visual Studio Community 2026.
+2. foobar2000 SDK (https://www.foobar2000.org/SDK).
    Extract it to a new directory called 'foobar2000_SDK'
    next to (not inside!) the ASAP directory.
 
