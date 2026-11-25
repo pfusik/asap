@@ -133,9 +133,33 @@ static bool ASAPMptSamples_Load(ASAPMptSamples *self, const ASAPFileLoader *load
 
 static void ASAPMptSamples_Relocate(ASAPMptSamples *self, int music, int musicLast);
 
-struct Cpu6502 {
-	ASAP *asap;
+typedef struct {
+	int (*peekHardware)(const Computer *self, int addr);
+	void (*pokeHardware)(Computer *self, int addr, int data);
+	bool (*isIrq)(const Computer *self);
+	void (*handleEvent)(Computer *self);
+} ComputerVtbl;
+/**
+ * The machine around the CPU: its hardware registers, interrupts and timed events.
+ */
+struct Computer {
+	const ComputerVtbl *vtbl;
+	/**
+	 * The 64K address space. The CPU accesses it through <code>Cpu6502.Memory</code>.
+	 */
 	uint8_t memory[65536];
+	/**
+	 * The cycle at which the CPU calls <code>HandleEvent</code>.
+	 */
+	int nextEventCycle;
+};
+
+struct Cpu6502 {
+	Computer *computer;
+	/**
+	 * <code>Computer.Memory</code>, referenced here for fast access.
+	 */
+	uint8_t *memory;
 	int cycle;
 	int pc;
 	int a;
@@ -441,7 +465,7 @@ static int ASAPInfo_GetTwoDateDigits(const ASAPInfo *self, int i);
  * This class performs no I/O operations - all music data must be passed in byte arrays.
  */
 struct ASAP {
-	int nextEventCycle;
+	Computer base;
 	Cpu6502 cpu;
 	int nextScanlineCycle;
 	NmiStatus nmist;
@@ -2490,11 +2514,19 @@ static void ASAPMptSamples_Relocate(ASAPMptSamples *self, int music, int musicLa
 
 static void ASAP_Construct(ASAP *self)
 {
+	static const ComputerVtbl vtbl = {
+		(int (*)(const Computer *self, int addr)) ASAP_PeekHardware,
+		(void (*)(Computer *self, int addr, int data)) ASAP_PokeHardware,
+		(bool (*)(const Computer *self)) ASAP_IsIrq,
+		(void (*)(Computer *self)) ASAP_HandleEvent,
+	};
+	self->base.vtbl = &vtbl;
 	PokeyPair_Construct(&self->pokeys);
 	ASAPInfo_Construct(&self->moduleInfo);
 	self->currentSampleRate = 44100;
 	self->silenceCycles = 0;
-	self->cpu.asap = self;
+	self->cpu.computer = &self->base;
+	self->cpu.memory = self->base.memory;
 }
 
 static void ASAP_Destruct(ASAP *self)
@@ -2574,7 +2606,7 @@ static int ASAP_PeekHardware(const ASAP *self, int addr)
 			return self->cpu.cycle < 28291 ? 0x1f : 0x5f;
 		}
 	default:
-		return self->cpu.memory[addr];
+		return self->base.memory[addr];
 	}
 }
 
@@ -2582,8 +2614,8 @@ static void ASAP_PokeHardware(ASAP *self, int addr, int data)
 {
 	if (addr >> 8 == 0xd2) {
 		int t = PokeyPair_Poke(&self->pokeys, addr, data, self->cpu.cycle);
-		if (self->nextEventCycle > t)
-			self->nextEventCycle = t;
+		if (self->base.nextEventCycle > t)
+			self->base.nextEventCycle = t;
 	}
 	else if ((addr & 0xff0f) == 0xd40a) {
 		int x = self->cpu.cycle % 114;
@@ -2613,39 +2645,39 @@ static void ASAP_PokeHardware(ASAP *self, int addr, int data)
 		self->consol = data;
 	}
 	else
-		self->cpu.memory[addr] = (uint8_t) data;
+		self->base.memory[addr] = (uint8_t) data;
 }
 
 static void ASAP_StoreJsr(ASAP *self, int addr, int target)
 {
-	self->cpu.memory[addr] = 0x20;
-	self->cpu.memory[addr + 1] = (uint8_t) target;
-	self->cpu.memory[addr + 2] = (uint8_t) (target >> 8);
+	self->base.memory[addr] = 0x20;
+	self->base.memory[addr + 1] = (uint8_t) target;
+	self->base.memory[addr + 2] = (uint8_t) (target >> 8);
 }
 
 static void ASAP_Call6502(ASAP *self, int target)
 {
 	ASAP_StoreJsr(self, 0xd200, target);
-	self->cpu.memory[53763] = 0xd2;
+	self->base.memory[53763] = 0xd2;
 	self->cpu.pc = 0xd200;
 }
 
 static void ASAP_Call6502PreservingRegisters(ASAP *self, int target)
 {
 	Cpu6502_PushPc(&self->cpu);
-	self->cpu.memory[0xd200] = 0x8;
-	self->cpu.memory[53761] = 0x48;
-	self->cpu.memory[53762] = 0x8a;
-	self->cpu.memory[53763] = 0x48;
-	self->cpu.memory[53764] = 0x98;
-	self->cpu.memory[53765] = 0x48;
+	self->base.memory[0xd200] = 0x8;
+	self->base.memory[53761] = 0x48;
+	self->base.memory[53762] = 0x8a;
+	self->base.memory[53763] = 0x48;
+	self->base.memory[53764] = 0x98;
+	self->base.memory[53765] = 0x48;
 	ASAP_StoreJsr(self, 53766, target);
-	self->cpu.memory[53769] = 0x68;
-	self->cpu.memory[53770] = 0xa8;
-	self->cpu.memory[53771] = 0x68;
-	self->cpu.memory[53772] = 0xaa;
-	self->cpu.memory[53773] = 0x68;
-	self->cpu.memory[53774] = 0x40;
+	self->base.memory[53769] = 0x68;
+	self->base.memory[53770] = 0xa8;
+	self->base.memory[53771] = 0x68;
+	self->base.memory[53772] = 0xaa;
+	self->base.memory[53773] = 0x68;
+	self->base.memory[53774] = 0x40;
 	self->cpu.pc = 0xd200;
 }
 
@@ -2669,10 +2701,10 @@ static void ASAP_Call6502Player(ASAP *self)
 		break;
 	case ASAPModuleType_SAP_S:
 		;
-		int i = self->cpu.memory[0x45] - 1;
-		self->cpu.memory[0x45] = (uint8_t) i;
+		int i = self->base.memory[0x45] - 1;
+		self->base.memory[0x45] = (uint8_t) i;
 		if (i == 0)
-			self->cpu.memory[0xb07b] = (uint8_t) (self->cpu.memory[0xb07b] + 1);
+			self->base.memory[0xb07b] = (uint8_t) (self->base.memory[0xb07b] + 1);
 		break;
 	case ASAPModuleType_DLT:
 		ASAP_Call6502(self, player + 0x103);
@@ -2689,16 +2721,16 @@ static void ASAP_Call6502Player(ASAP *self)
 		break;
 	case ASAPModuleType_TMC:
 		if (--self->tmcPerFrameCounter <= 0) {
-			self->tmcPerFrameCounter = self->cpu.memory[self->moduleInfo.music + 0x1f];
+			self->tmcPerFrameCounter = self->base.memory[self->moduleInfo.music + 0x1f];
 			ASAP_Call6502(self, player + 3);
 		}
 		else
 			ASAP_Call6502(self, player + 6);
 		break;
 	case ASAPModuleType_D15:
-		if (self->cpu.cycle < 1254 || self->mptSamplesCurrentAddress >> 8 >= self->cpu.memory[self->moduleInfo.music + 0x10 + self->currentSong])
+		if (self->cpu.cycle < 1254 || self->mptSamplesCurrentAddress >> 8 >= self->base.memory[self->moduleInfo.music + 0x10 + self->currentSong])
 			break;
-		int b = self->cpu.memory[self->mptSamplesCurrentAddress];
+		int b = self->base.memory[self->mptSamplesCurrentAddress];
 		if (self->mptSamplesSecondNibble) {
 			self->mptSamplesCurrentAddress++;
 			self->mptSamplesSecondNibble = false;
@@ -2732,12 +2764,12 @@ static void ASAP_HandleEvent(ASAP *self)
 	int nextEventCycle = self->nextScanlineCycle;
 	nextEventCycle = Pokey_CheckIrq(&self->pokeys.basePokey, cycle, nextEventCycle);
 	nextEventCycle = Pokey_CheckIrq(&self->pokeys.extraPokey, cycle, nextEventCycle);
-	self->nextEventCycle = nextEventCycle;
+	self->base.nextEventCycle = nextEventCycle;
 }
 
 static void ASAP_Do6502Cycles(ASAP *self, int cycles)
 {
-	self->nextEventCycle = 0;
+	self->base.nextEventCycle = 0;
 	self->nextScanlineCycle = 0;
 	self->nmist = self->nmist == NmiStatus_RESET ? NmiStatus_ON_V_BLANK : NmiStatus_WAS_V_BLANK;
 	Cpu6502_DoFrame(&self->cpu, cycles);
@@ -2791,17 +2823,17 @@ bool ASAP_LoadWithExtraFiles(ASAP *self, const char *filename, uint8_t const *mo
 {
 	if (!ASAPInfo_Load(&self->moduleInfo, filename, module, moduleLen))
 		return false;
-	memset(self->cpu.memory, 0, sizeof(self->cpu.memory));
+	memset(self->base.memory, 0, sizeof(self->base.memory));
 	int music = self->moduleInfo.music;
 	if (self->moduleInfo.type == ASAPModuleType_D15) {
-		memcpy(self->cpu.memory + music, module, moduleLen);
+		memcpy(self->base.memory + music, module, moduleLen);
 		return true;
 	}
 	uint8_t const *playerRoutine = ASAP6502_GetPlayerRoutine(&self->moduleInfo);
 	if (playerRoutine != NULL) {
 		int player = ASAPInfo_GetWord(playerRoutine, 2);
 		if (self->moduleInfo.type == ASAPModuleType_FC)
-			memcpy(self->cpu.memory + music, module, moduleLen);
+			memcpy(self->base.memory + music, module, moduleLen);
 		else {
 			int musicLow = self->moduleInfo.type == ASAPModuleType_TM2 ? 0x1400 : 0x1000;
 			if (music < musicLow)
@@ -2815,17 +2847,17 @@ bool ASAP_LoadWithExtraFiles(ASAP *self, const char *filename, uint8_t const *mo
 				ASAPMptSamples_Relocate(&samples, music, music + moduleLen - 5);
 				self->mptSamplesPage = samples.content[0];
 				self->mptSamples15kHz = samples.is15kHz;
-				memcpy(self->cpu.memory + ((self->mptSamplesPage << 8) - 0x20), samples.content, samples.contentLength);
+				memcpy(self->base.memory + ((self->mptSamplesPage << 8) - 0x20), samples.content, samples.contentLength);
 			}
 			ASAPModuleTransfer trans;
 			trans.source = module;
 			trans.sourceOffset = 0;
-			trans.output = self->cpu.memory;
+			trans.output = self->base.memory;
 			trans.outputOffset = music;
 			ASAPModuleTransfer_TransferModule(&trans, &self->moduleInfo, moduleLen, false, false);
 		}
 		int playerLastByte = ASAPInfo_GetWord(playerRoutine, 4);
-		memcpy(self->cpu.memory + player, playerRoutine + 6, playerLastByte + 1 - player);
+		memcpy(self->base.memory + player, playerRoutine + 6, playerLastByte + 1 - player);
 		if (self->moduleInfo.player < 0)
 			self->moduleInfo.player = player;
 		return true;
@@ -2837,7 +2869,7 @@ bool ASAP_LoadWithExtraFiles(ASAP *self, const char *filename, uint8_t const *mo
 		if (blockLen <= 0 || moduleIndex + blockLen > moduleLen)
 			return false;
 		moduleIndex += 4;
-		memcpy(self->cpu.memory + startAddr, module + moduleIndex, blockLen);
+		memcpy(self->base.memory + startAddr, module + moduleIndex, blockLen);
 		moduleIndex += blockLen;
 		if (moduleIndex == moduleLen)
 			return true;
@@ -2858,9 +2890,9 @@ static bool ASAP_Do6502Init(ASAP *self, int pc, int a, int x, int y)
 	self->cpu.a = a & 0xff;
 	self->cpu.x = x & 0xff;
 	self->cpu.y = y & 0xff;
-	self->cpu.memory[0xd200] = 0xd2;
-	self->cpu.memory[0x1fe] = 255;
-	self->cpu.memory[0x1ff] = 209;
+	self->base.memory[0xd200] = 0xd2;
+	self->base.memory[0x1fe] = 255;
+	self->base.memory[0x1ff] = 209;
 	self->cpu.s = 0xfd;
 	for (int frame = 0; frame < 50; frame++) {
 		ASAP_Do6502Frame(self);
@@ -2954,9 +2986,9 @@ static bool ASAP_RestartSong(ASAP *self, int muteMask)
 			return false;
 		break;
 	case ASAPModuleType_D15:
-		self->mptSamplesCurrentAddress = self->cpu.memory[self->moduleInfo.music + self->currentSong] << 8;
+		self->mptSamplesCurrentAddress = self->base.memory[self->moduleInfo.music + self->currentSong] << 8;
 		self->mptSamplesSecondNibble = false;
-		self->cpu.memory[0xd200] = 0xd2;
+		self->base.memory[0xd200] = 0xd2;
 		self->cpu.pc = 0xd200;
 		break;
 	}
@@ -6148,7 +6180,7 @@ static void Cpu6502_Reset(Cpu6502 *self)
 static int Cpu6502_Peek(const Cpu6502 *self, int addr)
 {
 	if ((addr & 0xf900) == 0xd000)
-		return ASAP_PeekHardware(self->asap, addr);
+		return self->computer->vtbl->peekHardware(self->computer, addr);
 	else
 		return self->memory[addr];
 }
@@ -6156,7 +6188,7 @@ static int Cpu6502_Peek(const Cpu6502 *self, int addr)
 static void Cpu6502_Poke(Cpu6502 *self, int addr, int data)
 {
 	if ((addr & 0xf900) == 0xd000)
-		ASAP_PokeHardware(self->asap, addr, data);
+		self->computer->vtbl->pokeHardware(self->computer, addr, data);
 	else
 		self->memory[addr] = (uint8_t) data;
 }
@@ -6165,8 +6197,8 @@ static int Cpu6502_PeekReadModifyWrite(Cpu6502 *self, int addr)
 {
 	if (addr >> 8 == 0xd2) {
 		self->cycle--;
-		int data = ASAP_PeekHardware(self->asap, addr);
-		ASAP_PokeHardware(self->asap, addr, data);
+		int data = self->computer->vtbl->peekHardware(self->computer, addr);
+		self->computer->vtbl->pokeHardware(self->computer, addr, data);
 		self->cycle++;
 		return data;
 	}
@@ -6318,7 +6350,7 @@ static void Cpu6502_ExecuteIrq(Cpu6502 *self, int b)
 
 static void Cpu6502_CheckIrq(Cpu6502 *self)
 {
-	if ((self->vdi & 0x4) == 0 && ASAP_IsIrq(self->asap)) {
+	if ((self->vdi & 0x4) == 0 && self->computer->vtbl->isIrq(self->computer)) {
 		self->cycle += 7;
 		Cpu6502_ExecuteIrq(self, 0x20);
 	}
@@ -6338,8 +6370,8 @@ static void Cpu6502_Shx(Cpu6502 *self, int addr, int data)
 static void Cpu6502_DoFrame(Cpu6502 *self, int cycleLimit)
 {
 	while (self->cycle < cycleLimit) {
-		if (self->cycle >= self->asap->nextEventCycle) {
-			ASAP_HandleEvent(self->asap);
+		if (self->cycle >= self->computer->nextEventCycle) {
+			self->computer->vtbl->handleEvent(self->computer);
 			Cpu6502_CheckIrq(self);
 		}
 		int data = self->memory[self->pc++];
@@ -6398,7 +6430,7 @@ static void Cpu6502_DoFrame(Cpu6502 *self, int cycleLimit)
 		case 0xd2:
 		case 0xf2:
 			self->pc--;
-			self->cycle = self->asap->nextEventCycle;
+			self->cycle = self->computer->nextEventCycle;
 			continue;
 		case 0x4:
 		case 0x44:
