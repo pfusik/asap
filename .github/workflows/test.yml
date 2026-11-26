@@ -6,6 +6,8 @@ on:
   pull_request:
     paths-ignore:
       - '**.md'
+env:
+  GH_TOKEN: ${{ github.token }}
 jobs:
   test:
     runs-on: ubuntu-26.04
