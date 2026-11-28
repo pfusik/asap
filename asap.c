@@ -2891,9 +2891,9 @@ static bool ASAP_Do6502Init(ASAP *self, int pc, int a, int x, int y)
 	self->cpu.x = x & 0xff;
 	self->cpu.y = y & 0xff;
 	self->base.memory[0xd200] = 0xd2;
-	self->base.memory[0x1fe] = 255;
-	self->base.memory[0x1ff] = 209;
 	self->cpu.s = 0xfd;
+	self->base.memory[0x101 + self->cpu.s] = 255;
+	self->base.memory[0x102 + self->cpu.s] = 209;
 	for (int frame = 0; frame < 50; frame++) {
 		ASAP_Do6502Frame(self);
 		if (self->cpu.pc == 0xd200)
