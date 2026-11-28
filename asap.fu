@@ -448,7 +448,7 @@ public class ASAP : Computer
 	{
 		const int codeAddr = 0xd200;
 		StoreJsr(codeAddr, target);
-		Memory[codeAddr + 3] = 0xd2; // escape
+		Memory[codeAddr + 3] = 0xd2; // escape opcode
 		Cpu.Pc = codeAddr;
 	}
 
@@ -708,12 +708,12 @@ public class ASAP : Computer
 		Cpu.X = x & 0xff;
 		Cpu.Y = y & 0xff;
 		const int escapeAddr = 0xd200;
-		// escape code
+		// escape opcode, halts the Cpu.Pc
 		Memory[escapeAddr] = 0xd2;
-		// return address points to the escape code
-		Memory[0x1fe] = (escapeAddr - 1) & 0xff;
-		Memory[0x1ff] = (escapeAddr - 1) >> 8;
+		// put the return address to the escape opcode onto the topmost stack location
 		Cpu.S = 0xfd;
+		Memory[0x101 + Cpu.S] = (escapeAddr - 1) & 0xff;
+		Memory[0x102 + Cpu.S] = (escapeAddr - 1) >> 8;
 		for (int frame = 0; frame < 50; frame++) {
 			Do6502Frame();
 			if (Cpu.Pc == escapeAddr)
