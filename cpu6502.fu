@@ -66,9 +66,9 @@ public abstract class Computer
 
 class Cpu6502
 {
-	internal Computer!? Computer;
+	internal Computer! Computer;
 	/// `Computer.Memory`, referenced here for fast access.
-	internal byte[]!? Memory;
+	internal byte[]! Memory;
 	internal int Cycle;
 
 	internal int Pc;
